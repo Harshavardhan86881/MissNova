@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+openai
+pydantic
+requests
+python-dotenv
+groq
+sqlalchemy
+passlib[argon2]
+python-jose[cryptography]
+httpx
+email-validator
