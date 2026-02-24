@@ -19,6 +19,6 @@ pip install -r requirements.txt
 echo "---------------------------------------------------"
 echo "Setup complete!"
 echo "To start the server, run:"
-echo "source venv/bin/activate"w
+echo "source venv/bin/activate"
 echo "uvicorn main:app --reload"
 echo "---------------------------------------------------"
