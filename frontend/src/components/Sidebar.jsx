@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
     MessageSquare, Mic, BookOpen, BarChart3, Target, Trophy,
-    Zap, Languages, Sparkles, Shield, AlertTriangle, Flame, LogOut, Settings, User, ChevronDown, Globe, Menu, X
+    Zap, Languages, Sparkles, Shield, AlertTriangle, Flame, LogOut, Settings, User, ChevronDown, Globe, Menu, X, FileText, Sliders, Headphones
 } from 'lucide-react';
 import { trackEvent, EVENTS } from '../utils/analytics';
 import { authFetch } from '../utils/authFetch';
@@ -78,6 +78,9 @@ const Sidebar = ({ currentPage, navigateTo, stats }) => {
         { id: 'translate', label: 'Translator', icon: Globe },
         { id: 'vocabulary', label: 'Word Bank', icon: BookOpen },
         { id: 'progress', label: 'Progress', icon: Trophy },
+        { id: 'bluf-generator', label: 'BLUF Generator', icon: FileText },
+        { id: 'tone-calibrator', label: 'Tone Calibrator', icon: Sliders },
+        { id: 'listening-simulator', label: 'Listening Sim', icon: Headphones },
     ];
 
     const streakAtRisk = stats?.streak_at_risk && stats?.streak_days > 0;

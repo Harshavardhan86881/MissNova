@@ -10,6 +10,9 @@ import Progress from './components/Progress';
 import DailyChallenge from './components/DailyChallenge';
 import DailyVocab from './components/DailyVocab';
 import TranslateInput from './components/TranslateInput';
+import BLUFGenerator from './components/BLUFGenerator';
+import ToneCalibrator from './components/ToneCalibrator';
+import ListeningSimulator from './components/ListeningSimulator';
 import BadgeToast from './components/BadgeToast';
 import MobileNav from './components/MobileNav';
 import Onboarding from './components/Onboarding';
@@ -218,6 +221,12 @@ function App() {
         return <DailyVocab onStatsUpdate={fetchStats} onBadges={handleBadges} language={currentLanguage} />;
       case 'translate':
         return <TranslateInput onStatsUpdate={fetchStats} onBadges={handleBadges} />;
+      case 'bluf-generator':
+        return <BLUFGenerator />;
+      case 'tone-calibrator':
+        return <ToneCalibrator />;
+      case 'listening-simulator':
+        return <ListeningSimulator />;
       default:
         return <Dashboard stats={stats} navigateTo={navigateTo} />;
     }

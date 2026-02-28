@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+﻿from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -28,9 +28,17 @@ app = FastAPI(title="CommMaster - AI Communication Learning Platform")
 # Include Auth Router
 app.include_router(auth_router.router)
 
+# Allow credentials requires explicit origins (wildcard + credentials is forbidden by browsers)
+_ALLOWED_ORIGINS = [
+    "https://miss-nova.vercel.app",
+    "https://miss-nova-harsha8688s-projects.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,6 +47,7 @@ app.add_middleware(
 # --- Groq Client ---
 groq_client = None
 
+
 def get_groq_client():
     global groq_client
     if groq_client is None:
@@ -46,12 +55,16 @@ def get_groq_client():
         groq_client = Groq(api_key=api_key)
     return groq_client
 
+
 # --- Persistent Data Store (Per-User) ---
-USERS_DATA_DIR = Path(__file__).resolve().parent / "users_data"
-USERS_DATA_DIR.mkdir(exist_ok=True)
+# On Vercel, only /tmp is writable. USERS_DATA_DIR env var overrides the default.
+_default_users_data = Path(__file__).resolve().parent / "users_data"
+USERS_DATA_DIR = Path(os.getenv("USERS_DATA_DIR", str(_default_users_data)))
+USERS_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Legacy single-user file (kept for migration)
 DATA_FILE = Path(__file__).resolve().parent / "user_data.json"
+
 
 def get_user_id_from_request(request: Request) -> str:
     """Extract user ID from Authorization header token.
@@ -67,6 +80,7 @@ def get_user_id_from_request(request: Request) -> str:
         if token.startswith("guest_"):
             return token
     return "default"
+
 
 def load_user_progress(user_id: str) -> dict:
     """Load progress data for a specific user."""
@@ -85,11 +99,13 @@ def load_user_progress(user_id: str) -> dict:
             pass
     return get_default_user_data()
 
+
 def save_user_progress(user_id: str, data: dict):
     """Save progress data for a specific user."""
     user_file = USERS_DATA_DIR / f"{user_id}.json"
     with open(user_file, "w") as f:
         json.dump(data, f, indent=2, default=str)
+
 
 # Keep legacy functions for backward compat with auth router etc.
 def load_user_data():
@@ -98,9 +114,11 @@ def load_user_data():
             return json.load(f)
     return get_default_user_data()
 
+
 def save_user_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=2, default=str)
+
 
 def get_default_user_data():
     return {
@@ -123,7 +141,7 @@ def get_default_user_data():
             "vocabulary": 5,
             "pronunciation": 5,
             "fluency": 5,
-            "confidence": 5
+            "confidence": 5,
         },
         "chat_sessions": [],
         "tongue_twisters_completed": 0,
@@ -136,20 +154,24 @@ def get_default_user_data():
         "max_streak": 0,
     }
 
+
 # Per-user conversation histories
 user_conversations: Dict[str, List[dict]] = {}
 
 # Legacy global (kept for backward compat with guest-signup etc)
 user_data = load_user_data()
 
+
 # --- Models ---
 class TextInput(BaseModel):
     text: str
+
 
 class ScenarioInput(BaseModel):
     text: str
     scenario_id: str
     scenario_context: str
+
 
 class VocabWord(BaseModel):
     word: str
@@ -157,14 +179,17 @@ class VocabWord(BaseModel):
     example: str
     mastery: int = 0
 
+
 class TongueTwisterInput(BaseModel):
     text: str
     target: str
+
 
 class VocabPracticeInput(BaseModel):
     word: str
     sentence: str
     definition: str
+
 
 # --- Scenarios ---
 SCENARIOS = {
@@ -182,7 +207,7 @@ SCENARIOS = {
             "Describe a challenging situation at work and how you handled it.",
             "Where do you see yourself in five years?",
         ],
-        "system_context": "You are a professional HR interviewer conducting a job interview. Evaluate the candidate's response for clarity, confidence, grammar, and professionalism. Give constructive feedback."
+        "system_context": "You are a professional HR interviewer conducting a job interview. Evaluate the candidate's response for clarity, confidence, grammar, and professionalism. Give constructive feedback.",
     },
     "business_meeting": {
         "id": "business_meeting",
@@ -197,7 +222,7 @@ SCENARIOS = {
             "Let's brainstorm solutions for the declining customer satisfaction scores.",
             "How would you propose we restructure the marketing department?",
         ],
-        "system_context": "You are a senior business executive in a meeting. Evaluate the speaker's communication for persuasiveness, professionalism, clarity, and use of business vocabulary."
+        "system_context": "You are a senior business executive in a meeting. Evaluate the speaker's communication for persuasiveness, professionalism, clarity, and use of business vocabulary.",
     },
     "casual_conversation": {
         "id": "casual_conversation",
@@ -212,7 +237,7 @@ SCENARIOS = {
             "What kind of food do you enjoy? Any favorite restaurants?",
             "Do you have any hobbies you're passionate about?",
         ],
-        "system_context": "You are a friendly, casual English-speaking friend having a relaxed conversation. Help the learner practice natural, everyday English with slang and idioms."
+        "system_context": "You are a friendly, casual English-speaking friend having a relaxed conversation. Help the learner practice natural, everyday English with slang and idioms.",
     },
     "public_speaking": {
         "id": "public_speaking",
@@ -227,7 +252,7 @@ SCENARIOS = {
             "Give a motivational speech to a team that just lost a big project.",
             "Present an argument for or against remote work.",
         ],
-        "system_context": "You are a speech coach evaluating a public speaking performance. Analyze structure, rhetoric, vocabulary, clarity, pacing cues, and emotional impact. Give detailed feedback."
+        "system_context": "You are a speech coach evaluating a public speaking performance. Analyze structure, rhetoric, vocabulary, clarity, pacing cues, and emotional impact. Give detailed feedback.",
     },
     "customer_service": {
         "id": "customer_service",
@@ -242,7 +267,7 @@ SCENARIOS = {
             "I was charged twice for my subscription. Can you help me?",
             "I'd like to request a refund. The product quality is terrible.",
         ],
-        "system_context": "You are an upset customer calling support. Evaluate the agent's response for empathy, problem-solving, professionalism, and communication clarity."
+        "system_context": "You are an upset customer calling support. Evaluate the agent's response for empathy, problem-solving, professionalism, and communication clarity.",
     },
     "debate": {
         "id": "debate",
@@ -257,7 +282,7 @@ SCENARIOS = {
             "University education should be free for everyone. Defend your stance.",
             "Climate change should be the number one priority for all governments.",
         ],
-        "system_context": "You are a debate moderator and opponent. Challenge the speaker's arguments, evaluate logical reasoning, use of evidence, rhetorical skills, and grammar."
+        "system_context": "You are a debate moderator and opponent. Challenge the speaker's arguments, evaluate logical reasoning, use of evidence, rhetorical skills, and grammar.",
     },
     "storytelling": {
         "id": "storytelling",
@@ -272,7 +297,7 @@ SCENARIOS = {
             "Tell a story about a time you overcame a big fear.",
             "Narrate a funny incident that happened to you recently.",
         ],
-        "system_context": "You are a storytelling coach. Evaluate the narrative for structure, descriptive language, emotional engagement, vocabulary richness, and grammar."
+        "system_context": "You are a storytelling coach. Evaluate the narrative for structure, descriptive language, emotional engagement, vocabulary richness, and grammar.",
     },
     "doctor_visit": {
         "id": "doctor_visit",
@@ -287,215 +312,673 @@ SCENARIOS = {
             "Are you currently taking any medications?",
             "Do you have any allergies I should be aware of?",
         ],
-        "system_context": "You are a friendly doctor conducting a patient consultation. Help the learner practice medical vocabulary and clear description of symptoms in English."
+        "system_context": "You are a friendly doctor conducting a patient consultation. Help the learner practice medical vocabulary and clear description of symptoms in English.",
     },
 }
 
 # --- Tongue Twisters ---
 TONGUE_TWISTERS = [
-    {"id": 1, "text": "She sells seashells by the seashore.", "difficulty": "Easy", "focus": "S and SH sounds"},
-    {"id": 2, "text": "Peter Piper picked a peck of pickled peppers.", "difficulty": "Easy", "focus": "P sounds"},
-    {"id": 3, "text": "How much wood would a woodchuck chuck if a woodchuck could chuck wood?", "difficulty": "Medium", "focus": "W and CH sounds"},
-    {"id": 4, "text": "Red lorry, yellow lorry, red lorry, yellow lorry.", "difficulty": "Medium", "focus": "R and L sounds"},
-    {"id": 5, "text": "The sixth sick sheikh's sixth sheep's sick.", "difficulty": "Hard", "focus": "S, SH, and TH sounds"},
-    {"id": 6, "text": "Betty Botter bought some butter, but she said the butter's bitter.", "difficulty": "Medium", "focus": "B and T sounds"},
-    {"id": 7, "text": "I scream, you scream, we all scream for ice cream.", "difficulty": "Easy", "focus": "SCR and CR sounds"},
-    {"id": 8, "text": "Unique New York, unique New York, you know you need unique New York.", "difficulty": "Hard", "focus": "N, Y, and U sounds"},
-    {"id": 9, "text": "The thirty-three thieves thought that they thrilled the throne throughout Thursday.", "difficulty": "Hard", "focus": "TH sounds"},
-    {"id": 10, "text": "A proper copper coffee pot.", "difficulty": "Easy", "focus": "P and C sounds"},
-    {"id": 11, "text": "Six slippery snails slid slowly seaward.", "difficulty": "Medium", "focus": "S and SL sounds"},
-    {"id": 12, "text": "Fresh French fried fish.", "difficulty": "Easy", "focus": "F and FR sounds"},
-    {"id": 13, "text": "Whether the weather is warm, whether the weather is hot, we have to put up with the weather, whether we like it or not.", "difficulty": "Hard", "focus": "W and TH sounds"},
-    {"id": 14, "text": "Can you can a canned can into an un-canned can like a canner can can a canned can into an un-canned can?", "difficulty": "Hard", "focus": "C and K sounds"},
-    {"id": 15, "text": "Fuzzy Wuzzy was a bear. Fuzzy Wuzzy had no hair. Fuzzy Wuzzy wasn't very fuzzy, was he?", "difficulty": "Medium", "focus": "F, W, and Z sounds"},
+    {
+        "id": 1,
+        "text": "She sells seashells by the seashore.",
+        "difficulty": "Easy",
+        "focus": "S and SH sounds",
+    },
+    {
+        "id": 2,
+        "text": "Peter Piper picked a peck of pickled peppers.",
+        "difficulty": "Easy",
+        "focus": "P sounds",
+    },
+    {
+        "id": 3,
+        "text": "How much wood would a woodchuck chuck if a woodchuck could chuck wood?",
+        "difficulty": "Medium",
+        "focus": "W and CH sounds",
+    },
+    {
+        "id": 4,
+        "text": "Red lorry, yellow lorry, red lorry, yellow lorry.",
+        "difficulty": "Medium",
+        "focus": "R and L sounds",
+    },
+    {
+        "id": 5,
+        "text": "The sixth sick sheikh's sixth sheep's sick.",
+        "difficulty": "Hard",
+        "focus": "S, SH, and TH sounds",
+    },
+    {
+        "id": 6,
+        "text": "Betty Botter bought some butter, but she said the butter's bitter.",
+        "difficulty": "Medium",
+        "focus": "B and T sounds",
+    },
+    {
+        "id": 7,
+        "text": "I scream, you scream, we all scream for ice cream.",
+        "difficulty": "Easy",
+        "focus": "SCR and CR sounds",
+    },
+    {
+        "id": 8,
+        "text": "Unique New York, unique New York, you know you need unique New York.",
+        "difficulty": "Hard",
+        "focus": "N, Y, and U sounds",
+    },
+    {
+        "id": 9,
+        "text": "The thirty-three thieves thought that they thrilled the throne throughout Thursday.",
+        "difficulty": "Hard",
+        "focus": "TH sounds",
+    },
+    {
+        "id": 10,
+        "text": "A proper copper coffee pot.",
+        "difficulty": "Easy",
+        "focus": "P and C sounds",
+    },
+    {
+        "id": 11,
+        "text": "Six slippery snails slid slowly seaward.",
+        "difficulty": "Medium",
+        "focus": "S and SL sounds",
+    },
+    {
+        "id": 12,
+        "text": "Fresh French fried fish.",
+        "difficulty": "Easy",
+        "focus": "F and FR sounds",
+    },
+    {
+        "id": 13,
+        "text": "Whether the weather is warm, whether the weather is hot, we have to put up with the weather, whether we like it or not.",
+        "difficulty": "Hard",
+        "focus": "W and TH sounds",
+    },
+    {
+        "id": 14,
+        "text": "Can you can a canned can into an un-canned can like a canner can can a canned can into an un-canned can?",
+        "difficulty": "Hard",
+        "focus": "C and K sounds",
+    },
+    {
+        "id": 15,
+        "text": "Fuzzy Wuzzy was a bear. Fuzzy Wuzzy had no hair. Fuzzy Wuzzy wasn't very fuzzy, was he?",
+        "difficulty": "Medium",
+        "focus": "F, W, and Z sounds",
+    },
 ]
 
 # --- Daily Vocabulary Words (150+ curated words) ---
 DAILY_VOCAB_POOL = [
     # Business & Professional
-    {"word": "Articulate", "definition": "To express an idea or feeling fluently and clearly", "category": "Business", "level": "Intermediate",
-     "examples": ["She articulated her vision for the company's future.", "He's very articulate when presenting to clients."],
-     "usage_tips": "Use in professional settings when someone explains something clearly. Also works as an adjective: 'an articulate speaker'.",
-     "synonyms": ["express", "convey", "communicate"], "antonyms": ["mumble", "stammer"]},
-    {"word": "Leverage", "definition": "To use something to maximum advantage", "category": "Business", "level": "Advanced",
-     "examples": ["We can leverage our social media presence to attract customers.", "She leveraged her experience to negotiate a higher salary."],
-     "usage_tips": "Very common in business meetings and strategy discussions. Can be a noun or verb.",
-     "synonyms": ["utilize", "exploit", "capitalize on"], "antonyms": ["waste", "neglect"]},
-    {"word": "Collaborate", "definition": "To work jointly with others on a project or task", "category": "Business", "level": "Beginner",
-     "examples": ["The two departments collaborated on the marketing campaign.", "Let's collaborate to find a better solution."],
-     "usage_tips": "Great word for teamwork situations. Use 'collaborate with' (people) or 'collaborate on' (projects).",
-     "synonyms": ["cooperate", "partner", "team up"], "antonyms": ["compete", "oppose"]},
-    {"word": "Delegate", "definition": "To assign responsibility or authority to another person", "category": "Business", "level": "Intermediate",
-     "examples": ["A good manager knows when to delegate tasks.", "She delegated the report writing to her assistant."],
-     "usage_tips": "Key leadership word. Shows you understand management. 'Delegate TO someone' or 'delegate a task'.",
-     "synonyms": ["assign", "entrust", "allocate"], "antonyms": ["retain", "micromanage"]},
-    {"word": "Streamline", "definition": "To make a process more efficient by simplifying it", "category": "Business", "level": "Intermediate",
-     "examples": ["We need to streamline our onboarding process.", "The new software will streamline daily operations."],
-     "usage_tips": "Perfect for discussing improvements at work. Shows you think about efficiency.",
-     "synonyms": ["simplify", "optimize", "modernize"], "antonyms": ["complicate", "hinder"]},
-    {"word": "Proactive", "definition": "Creating or controlling a situation rather than just responding to it", "category": "Business", "level": "Intermediate",
-     "examples": ["Be proactive about fixing issues before they escalate.", "Her proactive approach saved the project from failure."],
-     "usage_tips": "Opposite of 'reactive'. Great word for interviews — employers love proactive employees.",
-     "synonyms": ["anticipatory", "forward-thinking"], "antonyms": ["reactive", "passive"]},
-    {"word": "Benchmark", "definition": "A standard or point of reference for comparison", "category": "Business", "level": "Advanced",
-     "examples": ["This company sets the benchmark for customer service.", "We benchmark our performance against industry leaders."],
-     "usage_tips": "Used as both noun and verb. Common in performance reviews and competitive analysis.",
-     "synonyms": ["standard", "reference point", "yardstick"], "antonyms": []},
-    {"word": "Synergy", "definition": "The combined effect that is greater than individual parts", "category": "Business", "level": "Advanced",
-     "examples": ["The merger created incredible synergy between the two brands.", "There's great synergy between our marketing and sales teams."],
-     "usage_tips": "Very corporate word. Use sparingly to sound professional, not buzzwordy.",
-     "synonyms": ["harmony", "cooperation", "collaboration"], "antonyms": ["discord", "conflict"]},
-    {"word": "Feasible", "definition": "Possible and practical to do or achieve", "category": "Business", "level": "Intermediate",
-     "examples": ["Is it feasible to complete the project by Friday?", "We need a feasible plan, not just ideas."],
-     "usage_tips": "Use instead of 'possible' to sound more professional. Common in proposals and planning.",
-     "synonyms": ["viable", "practical", "achievable"], "antonyms": ["impossible", "impractical"]},
-    {"word": "Paradigm", "definition": "A typical example, pattern, or model of something", "category": "Business", "level": "Advanced",
-     "examples": ["The internet created a paradigm shift in communication.", "We need a new paradigm for remote work."],
-     "usage_tips": "Often used with 'shift' to describe major changes. Pronounced 'PAIR-uh-dime'.",
-     "synonyms": ["model", "framework", "template"], "antonyms": []},
-
+    {
+        "word": "Articulate",
+        "definition": "To express an idea or feeling fluently and clearly",
+        "category": "Business",
+        "level": "Intermediate",
+        "examples": [
+            "She articulated her vision for the company's future.",
+            "He's very articulate when presenting to clients.",
+        ],
+        "usage_tips": "Use in professional settings when someone explains something clearly. Also works as an adjective: 'an articulate speaker'.",
+        "synonyms": ["express", "convey", "communicate"],
+        "antonyms": ["mumble", "stammer"],
+    },
+    {
+        "word": "Leverage",
+        "definition": "To use something to maximum advantage",
+        "category": "Business",
+        "level": "Advanced",
+        "examples": [
+            "We can leverage our social media presence to attract customers.",
+            "She leveraged her experience to negotiate a higher salary.",
+        ],
+        "usage_tips": "Very common in business meetings and strategy discussions. Can be a noun or verb.",
+        "synonyms": ["utilize", "exploit", "capitalize on"],
+        "antonyms": ["waste", "neglect"],
+    },
+    {
+        "word": "Collaborate",
+        "definition": "To work jointly with others on a project or task",
+        "category": "Business",
+        "level": "Beginner",
+        "examples": [
+            "The two departments collaborated on the marketing campaign.",
+            "Let's collaborate to find a better solution.",
+        ],
+        "usage_tips": "Great word for teamwork situations. Use 'collaborate with' (people) or 'collaborate on' (projects).",
+        "synonyms": ["cooperate", "partner", "team up"],
+        "antonyms": ["compete", "oppose"],
+    },
+    {
+        "word": "Delegate",
+        "definition": "To assign responsibility or authority to another person",
+        "category": "Business",
+        "level": "Intermediate",
+        "examples": [
+            "A good manager knows when to delegate tasks.",
+            "She delegated the report writing to her assistant.",
+        ],
+        "usage_tips": "Key leadership word. Shows you understand management. 'Delegate TO someone' or 'delegate a task'.",
+        "synonyms": ["assign", "entrust", "allocate"],
+        "antonyms": ["retain", "micromanage"],
+    },
+    {
+        "word": "Streamline",
+        "definition": "To make a process more efficient by simplifying it",
+        "category": "Business",
+        "level": "Intermediate",
+        "examples": [
+            "We need to streamline our onboarding process.",
+            "The new software will streamline daily operations.",
+        ],
+        "usage_tips": "Perfect for discussing improvements at work. Shows you think about efficiency.",
+        "synonyms": ["simplify", "optimize", "modernize"],
+        "antonyms": ["complicate", "hinder"],
+    },
+    {
+        "word": "Proactive",
+        "definition": "Creating or controlling a situation rather than just responding to it",
+        "category": "Business",
+        "level": "Intermediate",
+        "examples": [
+            "Be proactive about fixing issues before they escalate.",
+            "Her proactive approach saved the project from failure.",
+        ],
+        "usage_tips": "Opposite of 'reactive'. Great word for interviews — employers love proactive employees.",
+        "synonyms": ["anticipatory", "forward-thinking"],
+        "antonyms": ["reactive", "passive"],
+    },
+    {
+        "word": "Benchmark",
+        "definition": "A standard or point of reference for comparison",
+        "category": "Business",
+        "level": "Advanced",
+        "examples": [
+            "This company sets the benchmark for customer service.",
+            "We benchmark our performance against industry leaders.",
+        ],
+        "usage_tips": "Used as both noun and verb. Common in performance reviews and competitive analysis.",
+        "synonyms": ["standard", "reference point", "yardstick"],
+        "antonyms": [],
+    },
+    {
+        "word": "Synergy",
+        "definition": "The combined effect that is greater than individual parts",
+        "category": "Business",
+        "level": "Advanced",
+        "examples": [
+            "The merger created incredible synergy between the two brands.",
+            "There's great synergy between our marketing and sales teams.",
+        ],
+        "usage_tips": "Very corporate word. Use sparingly to sound professional, not buzzwordy.",
+        "synonyms": ["harmony", "cooperation", "collaboration"],
+        "antonyms": ["discord", "conflict"],
+    },
+    {
+        "word": "Feasible",
+        "definition": "Possible and practical to do or achieve",
+        "category": "Business",
+        "level": "Intermediate",
+        "examples": [
+            "Is it feasible to complete the project by Friday?",
+            "We need a feasible plan, not just ideas.",
+        ],
+        "usage_tips": "Use instead of 'possible' to sound more professional. Common in proposals and planning.",
+        "synonyms": ["viable", "practical", "achievable"],
+        "antonyms": ["impossible", "impractical"],
+    },
+    {
+        "word": "Paradigm",
+        "definition": "A typical example, pattern, or model of something",
+        "category": "Business",
+        "level": "Advanced",
+        "examples": [
+            "The internet created a paradigm shift in communication.",
+            "We need a new paradigm for remote work.",
+        ],
+        "usage_tips": "Often used with 'shift' to describe major changes. Pronounced 'PAIR-uh-dime'.",
+        "synonyms": ["model", "framework", "template"],
+        "antonyms": [],
+    },
     # Academic & Intellectual
-    {"word": "Hypothesis", "definition": "A proposed explanation based on limited evidence as a starting point", "category": "Academic", "level": "Intermediate",
-     "examples": ["My hypothesis is that exercise improves focus.", "The scientist tested her hypothesis through experiments."],
-     "usage_tips": "Use when proposing ideas or explanations. More formal than 'guess'. Plural: 'hypotheses'.",
-     "synonyms": ["theory", "assumption", "proposition"], "antonyms": ["fact", "proof"]},
-    {"word": "Analyze", "definition": "To examine something in detail to understand it better", "category": "Academic", "level": "Beginner",
-     "examples": ["Let's analyze the data before making a decision.", "She analyzed the poem for hidden meanings."],
-     "usage_tips": "Essential academic word. Use instead of 'look at' for formal contexts.",
-     "synonyms": ["examine", "investigate", "evaluate"], "antonyms": ["ignore", "overlook"]},
-    {"word": "Comprehensive", "definition": "Including all or nearly all elements; thorough", "category": "Academic", "level": "Intermediate",
-     "examples": ["We need a comprehensive review of the literature.", "The guide provides comprehensive coverage of the topic."],
-     "usage_tips": "Strong adjective for describing thoroughness. Much better than saying 'complete' in formal writing.",
-     "synonyms": ["thorough", "exhaustive", "all-inclusive"], "antonyms": ["partial", "incomplete"]},
-    {"word": "Empirical", "definition": "Based on observation or experience rather than theory", "category": "Academic", "level": "Advanced",
-     "examples": ["The study provides empirical evidence for the claim.", "We need empirical data, not just opinions."],
-     "usage_tips": "Key academic term. Shows you value evidence-based reasoning. 'Empirical evidence' is a common phrase.",
-     "synonyms": ["observational", "experimental", "factual"], "antonyms": ["theoretical", "hypothetical"]},
-    {"word": "Elaborate", "definition": "To develop or explain in more detail", "category": "Academic", "level": "Beginner",
-     "examples": ["Could you elaborate on that point?", "She elaborated her argument with examples."],
-     "usage_tips": "Perfect for discussions and presentations. 'Can you elaborate?' is a polite way to ask for more detail.",
-     "synonyms": ["expand", "clarify", "detail"], "antonyms": ["summarize", "simplify"]},
-    {"word": "Ambiguous", "definition": "Open to more than one interpretation; unclear", "category": "Academic", "level": "Intermediate",
-     "examples": ["The contract language is ambiguous and could cause problems.", "His response was ambiguous — I'm not sure if he agreed."],
-     "usage_tips": "Use when something is unclear or has multiple meanings. Noun form: 'ambiguity'.",
-     "synonyms": ["vague", "unclear", "equivocal"], "antonyms": ["clear", "explicit", "unambiguous"]},
-    {"word": "Pragmatic", "definition": "Dealing with things in a practical rather than idealistic way", "category": "Academic", "level": "Advanced",
-     "examples": ["We need a pragmatic approach to solve this.", "She's a pragmatic leader who focuses on results."],
-     "usage_tips": "Great word for showing you're practical and solution-oriented. Opposite of 'idealistic'.",
-     "synonyms": ["practical", "realistic", "sensible"], "antonyms": ["idealistic", "impractical"]},
-    {"word": "Nuance", "definition": "A subtle difference in meaning, expression, or sound", "category": "Academic", "level": "Advanced",
-     "examples": ["There are important nuances in the legal language.", "She understands the nuances of cross-cultural communication."],
-     "usage_tips": "Shows sophistication. Use when discussing subtle but important differences.",
-     "synonyms": ["subtlety", "distinction", "shade"], "antonyms": ["bluntness", "obviousness"]},
-
+    {
+        "word": "Hypothesis",
+        "definition": "A proposed explanation based on limited evidence as a starting point",
+        "category": "Academic",
+        "level": "Intermediate",
+        "examples": [
+            "My hypothesis is that exercise improves focus.",
+            "The scientist tested her hypothesis through experiments.",
+        ],
+        "usage_tips": "Use when proposing ideas or explanations. More formal than 'guess'. Plural: 'hypotheses'.",
+        "synonyms": ["theory", "assumption", "proposition"],
+        "antonyms": ["fact", "proof"],
+    },
+    {
+        "word": "Analyze",
+        "definition": "To examine something in detail to understand it better",
+        "category": "Academic",
+        "level": "Beginner",
+        "examples": [
+            "Let's analyze the data before making a decision.",
+            "She analyzed the poem for hidden meanings.",
+        ],
+        "usage_tips": "Essential academic word. Use instead of 'look at' for formal contexts.",
+        "synonyms": ["examine", "investigate", "evaluate"],
+        "antonyms": ["ignore", "overlook"],
+    },
+    {
+        "word": "Comprehensive",
+        "definition": "Including all or nearly all elements; thorough",
+        "category": "Academic",
+        "level": "Intermediate",
+        "examples": [
+            "We need a comprehensive review of the literature.",
+            "The guide provides comprehensive coverage of the topic.",
+        ],
+        "usage_tips": "Strong adjective for describing thoroughness. Much better than saying 'complete' in formal writing.",
+        "synonyms": ["thorough", "exhaustive", "all-inclusive"],
+        "antonyms": ["partial", "incomplete"],
+    },
+    {
+        "word": "Empirical",
+        "definition": "Based on observation or experience rather than theory",
+        "category": "Academic",
+        "level": "Advanced",
+        "examples": [
+            "The study provides empirical evidence for the claim.",
+            "We need empirical data, not just opinions.",
+        ],
+        "usage_tips": "Key academic term. Shows you value evidence-based reasoning. 'Empirical evidence' is a common phrase.",
+        "synonyms": ["observational", "experimental", "factual"],
+        "antonyms": ["theoretical", "hypothetical"],
+    },
+    {
+        "word": "Elaborate",
+        "definition": "To develop or explain in more detail",
+        "category": "Academic",
+        "level": "Beginner",
+        "examples": [
+            "Could you elaborate on that point?",
+            "She elaborated her argument with examples.",
+        ],
+        "usage_tips": "Perfect for discussions and presentations. 'Can you elaborate?' is a polite way to ask for more detail.",
+        "synonyms": ["expand", "clarify", "detail"],
+        "antonyms": ["summarize", "simplify"],
+    },
+    {
+        "word": "Ambiguous",
+        "definition": "Open to more than one interpretation; unclear",
+        "category": "Academic",
+        "level": "Intermediate",
+        "examples": [
+            "The contract language is ambiguous and could cause problems.",
+            "His response was ambiguous — I'm not sure if he agreed.",
+        ],
+        "usage_tips": "Use when something is unclear or has multiple meanings. Noun form: 'ambiguity'.",
+        "synonyms": ["vague", "unclear", "equivocal"],
+        "antonyms": ["clear", "explicit", "unambiguous"],
+    },
+    {
+        "word": "Pragmatic",
+        "definition": "Dealing with things in a practical rather than idealistic way",
+        "category": "Academic",
+        "level": "Advanced",
+        "examples": [
+            "We need a pragmatic approach to solve this.",
+            "She's a pragmatic leader who focuses on results.",
+        ],
+        "usage_tips": "Great word for showing you're practical and solution-oriented. Opposite of 'idealistic'.",
+        "synonyms": ["practical", "realistic", "sensible"],
+        "antonyms": ["idealistic", "impractical"],
+    },
+    {
+        "word": "Nuance",
+        "definition": "A subtle difference in meaning, expression, or sound",
+        "category": "Academic",
+        "level": "Advanced",
+        "examples": [
+            "There are important nuances in the legal language.",
+            "She understands the nuances of cross-cultural communication.",
+        ],
+        "usage_tips": "Shows sophistication. Use when discussing subtle but important differences.",
+        "synonyms": ["subtlety", "distinction", "shade"],
+        "antonyms": ["bluntness", "obviousness"],
+    },
     # Social & Conversation
-    {"word": "Empathize", "definition": "To understand and share the feelings of another person", "category": "Social", "level": "Intermediate",
-     "examples": ["I can empathize with your frustration.", "Good leaders empathize with their team members."],
-     "usage_tips": "Use 'empathize WITH' someone. Different from 'sympathize' — empathy means you truly feel what they feel.",
-     "synonyms": ["understand", "relate to", "identify with"], "antonyms": ["disregard", "ignore"]},
-    {"word": "Rapport", "definition": "A close and harmonious relationship with good communication", "category": "Social", "level": "Intermediate",
-     "examples": ["She quickly built rapport with the new client.", "Having good rapport makes teamwork much easier."],
-     "usage_tips": "Pronounced 'ra-POR'. 'Build rapport' is the most common phrase. Essential for networking.",
-     "synonyms": ["connection", "bond", "understanding"], "antonyms": ["hostility", "distance"]},
-    {"word": "Assertive", "definition": "Confident and direct in claiming one's rights or expressing opinions", "category": "Social", "level": "Intermediate",
-     "examples": ["You need to be more assertive in meetings.", "She gave an assertive response without being aggressive."],
-     "usage_tips": "Positive word — different from 'aggressive'. Being assertive means speaking up respectfully.",
-     "synonyms": ["confident", "self-assured", "forthright"], "antonyms": ["passive", "timid", "submissive"]},
-    {"word": "Eloquent", "definition": "Fluent, persuasive, and clearly expressed in speech or writing", "category": "Social", "level": "Advanced",
-     "examples": ["She gave an eloquent speech at the ceremony.", "His eloquent writing inspired millions."],
-     "usage_tips": "High-level compliment for someone's speaking ability. Noun: 'eloquence'.",
-     "synonyms": ["articulate", "expressive", "persuasive"], "antonyms": ["inarticulate", "incoherent"]},
-    {"word": "Cordial", "definition": "Warm, friendly, and polite", "category": "Social", "level": "Intermediate",
-     "examples": ["They had a cordial meeting despite their differences.", "She greeted everyone with a cordial smile."],
-     "usage_tips": "Perfect for describing professional but warm interactions. More formal than 'friendly'.",
-     "synonyms": ["warm", "gracious", "amiable"], "antonyms": ["hostile", "cold", "unfriendly"]},
-    {"word": "Tactful", "definition": "Showing skill in dealing with others without causing offense", "category": "Social", "level": "Intermediate",
-     "examples": ["She was tactful in delivering the bad news.", "Being tactful is essential in customer service."],
-     "usage_tips": "Key social skill word. 'Tact' is the noun form. Opposite: 'tactless' (rude/careless with words).",
-     "synonyms": ["diplomatic", "sensitive", "discreet"], "antonyms": ["tactless", "blunt", "insensitive"]},
-    {"word": "Charismatic", "definition": "Exercising a compelling charm that inspires devotion in others", "category": "Social", "level": "Intermediate",
-     "examples": ["The charismatic speaker captivated the audience.", "She has a charismatic personality that draws people in."],
-     "usage_tips": "Strong compliment for someone's presence. Noun: 'charisma'. Great for describing leaders.",
-     "synonyms": ["charming", "magnetic", "captivating"], "antonyms": ["repulsive", "dull", "uninspiring"]},
-
+    {
+        "word": "Empathize",
+        "definition": "To understand and share the feelings of another person",
+        "category": "Social",
+        "level": "Intermediate",
+        "examples": [
+            "I can empathize with your frustration.",
+            "Good leaders empathize with their team members.",
+        ],
+        "usage_tips": "Use 'empathize WITH' someone. Different from 'sympathize' — empathy means you truly feel what they feel.",
+        "synonyms": ["understand", "relate to", "identify with"],
+        "antonyms": ["disregard", "ignore"],
+    },
+    {
+        "word": "Rapport",
+        "definition": "A close and harmonious relationship with good communication",
+        "category": "Social",
+        "level": "Intermediate",
+        "examples": [
+            "She quickly built rapport with the new client.",
+            "Having good rapport makes teamwork much easier.",
+        ],
+        "usage_tips": "Pronounced 'ra-POR'. 'Build rapport' is the most common phrase. Essential for networking.",
+        "synonyms": ["connection", "bond", "understanding"],
+        "antonyms": ["hostility", "distance"],
+    },
+    {
+        "word": "Assertive",
+        "definition": "Confident and direct in claiming one's rights or expressing opinions",
+        "category": "Social",
+        "level": "Intermediate",
+        "examples": [
+            "You need to be more assertive in meetings.",
+            "She gave an assertive response without being aggressive.",
+        ],
+        "usage_tips": "Positive word — different from 'aggressive'. Being assertive means speaking up respectfully.",
+        "synonyms": ["confident", "self-assured", "forthright"],
+        "antonyms": ["passive", "timid", "submissive"],
+    },
+    {
+        "word": "Eloquent",
+        "definition": "Fluent, persuasive, and clearly expressed in speech or writing",
+        "category": "Social",
+        "level": "Advanced",
+        "examples": [
+            "She gave an eloquent speech at the ceremony.",
+            "His eloquent writing inspired millions.",
+        ],
+        "usage_tips": "High-level compliment for someone's speaking ability. Noun: 'eloquence'.",
+        "synonyms": ["articulate", "expressive", "persuasive"],
+        "antonyms": ["inarticulate", "incoherent"],
+    },
+    {
+        "word": "Cordial",
+        "definition": "Warm, friendly, and polite",
+        "category": "Social",
+        "level": "Intermediate",
+        "examples": [
+            "They had a cordial meeting despite their differences.",
+            "She greeted everyone with a cordial smile.",
+        ],
+        "usage_tips": "Perfect for describing professional but warm interactions. More formal than 'friendly'.",
+        "synonyms": ["warm", "gracious", "amiable"],
+        "antonyms": ["hostile", "cold", "unfriendly"],
+    },
+    {
+        "word": "Tactful",
+        "definition": "Showing skill in dealing with others without causing offense",
+        "category": "Social",
+        "level": "Intermediate",
+        "examples": [
+            "She was tactful in delivering the bad news.",
+            "Being tactful is essential in customer service.",
+        ],
+        "usage_tips": "Key social skill word. 'Tact' is the noun form. Opposite: 'tactless' (rude/careless with words).",
+        "synonyms": ["diplomatic", "sensitive", "discreet"],
+        "antonyms": ["tactless", "blunt", "insensitive"],
+    },
+    {
+        "word": "Charismatic",
+        "definition": "Exercising a compelling charm that inspires devotion in others",
+        "category": "Social",
+        "level": "Intermediate",
+        "examples": [
+            "The charismatic speaker captivated the audience.",
+            "She has a charismatic personality that draws people in.",
+        ],
+        "usage_tips": "Strong compliment for someone's presence. Noun: 'charisma'. Great for describing leaders.",
+        "synonyms": ["charming", "magnetic", "captivating"],
+        "antonyms": ["repulsive", "dull", "uninspiring"],
+    },
     # Emotional & Descriptive
-    {"word": "Resilient", "definition": "Able to recover quickly from difficulties; tough", "category": "Emotional", "level": "Intermediate",
-     "examples": ["She's incredibly resilient after all she's been through.", "Build a resilient mindset for challenging times."],
-     "usage_tips": "Very positive word. Noun: 'resilience'. Use in motivational or career contexts.",
-     "synonyms": ["tough", "strong", "adaptable"], "antonyms": ["fragile", "vulnerable", "weak"]},
-    {"word": "Meticulous", "definition": "Showing great attention to detail; very careful and precise", "category": "Emotional", "level": "Advanced",
-     "examples": ["She's meticulous about checking her work.", "The report was prepared with meticulous care."],
-     "usage_tips": "Great for resumes and describing work quality. Shows thoroughness without being negative.",
-     "synonyms": ["precise", "thorough", "painstaking"], "antonyms": ["careless", "sloppy", "negligent"]},
-    {"word": "Perseverance", "definition": "Continued effort despite difficulties or delay in achieving success", "category": "Emotional", "level": "Intermediate",
-     "examples": ["Her perseverance paid off when she finally got the promotion.", "Success requires talent and perseverance."],
-     "usage_tips": "Strong character trait. Verb: 'persevere'. Use in motivational contexts or interviews.",
-     "synonyms": ["persistence", "determination", "tenacity"], "antonyms": ["laziness", "giving up"]},
-    {"word": "Contentious", "definition": "Causing or likely to cause disagreement or argument", "category": "Emotional", "level": "Advanced",
-     "examples": ["Immigration is a contentious topic in politics.", "The board meeting became contentious over the budget."],
-     "usage_tips": "Use when describing controversial topics. More formal than 'controversial'.",
-     "synonyms": ["controversial", "debatable", "divisive"], "antonyms": ["agreeable", "uncontroversial"]},
-    {"word": "Gratitude", "definition": "The quality of being thankful; readiness to show appreciation", "category": "Emotional", "level": "Beginner",
-     "examples": ["I want to express my gratitude for your help.", "Practicing gratitude daily improves mental health."],
-     "usage_tips": "More formal than 'thanks'. Great for emails and formal speech. Adjective: 'grateful'.",
-     "synonyms": ["thankfulness", "appreciation", "recognition"], "antonyms": ["ingratitude", "ungratefulness"]},
-    {"word": "Diligent", "definition": "Showing careful and persistent work or effort", "category": "Emotional", "level": "Intermediate",
-     "examples": ["She's a diligent student who always completes her homework.", "Diligent research led to the breakthrough."],
-     "usage_tips": "Great for recommendations and self-descriptions. Noun: 'diligence'. Implies consistent effort.",
-     "synonyms": ["hardworking", "industrious", "conscientious"], "antonyms": ["lazy", "careless", "negligent"]},
-
+    {
+        "word": "Resilient",
+        "definition": "Able to recover quickly from difficulties; tough",
+        "category": "Emotional",
+        "level": "Intermediate",
+        "examples": [
+            "She's incredibly resilient after all she's been through.",
+            "Build a resilient mindset for challenging times.",
+        ],
+        "usage_tips": "Very positive word. Noun: 'resilience'. Use in motivational or career contexts.",
+        "synonyms": ["tough", "strong", "adaptable"],
+        "antonyms": ["fragile", "vulnerable", "weak"],
+    },
+    {
+        "word": "Meticulous",
+        "definition": "Showing great attention to detail; very careful and precise",
+        "category": "Emotional",
+        "level": "Advanced",
+        "examples": [
+            "She's meticulous about checking her work.",
+            "The report was prepared with meticulous care.",
+        ],
+        "usage_tips": "Great for resumes and describing work quality. Shows thoroughness without being negative.",
+        "synonyms": ["precise", "thorough", "painstaking"],
+        "antonyms": ["careless", "sloppy", "negligent"],
+    },
+    {
+        "word": "Perseverance",
+        "definition": "Continued effort despite difficulties or delay in achieving success",
+        "category": "Emotional",
+        "level": "Intermediate",
+        "examples": [
+            "Her perseverance paid off when she finally got the promotion.",
+            "Success requires talent and perseverance.",
+        ],
+        "usage_tips": "Strong character trait. Verb: 'persevere'. Use in motivational contexts or interviews.",
+        "synonyms": ["persistence", "determination", "tenacity"],
+        "antonyms": ["laziness", "giving up"],
+    },
+    {
+        "word": "Contentious",
+        "definition": "Causing or likely to cause disagreement or argument",
+        "category": "Emotional",
+        "level": "Advanced",
+        "examples": [
+            "Immigration is a contentious topic in politics.",
+            "The board meeting became contentious over the budget.",
+        ],
+        "usage_tips": "Use when describing controversial topics. More formal than 'controversial'.",
+        "synonyms": ["controversial", "debatable", "divisive"],
+        "antonyms": ["agreeable", "uncontroversial"],
+    },
+    {
+        "word": "Gratitude",
+        "definition": "The quality of being thankful; readiness to show appreciation",
+        "category": "Emotional",
+        "level": "Beginner",
+        "examples": [
+            "I want to express my gratitude for your help.",
+            "Practicing gratitude daily improves mental health.",
+        ],
+        "usage_tips": "More formal than 'thanks'. Great for emails and formal speech. Adjective: 'grateful'.",
+        "synonyms": ["thankfulness", "appreciation", "recognition"],
+        "antonyms": ["ingratitude", "ungratefulness"],
+    },
+    {
+        "word": "Diligent",
+        "definition": "Showing careful and persistent work or effort",
+        "category": "Emotional",
+        "level": "Intermediate",
+        "examples": [
+            "She's a diligent student who always completes her homework.",
+            "Diligent research led to the breakthrough.",
+        ],
+        "usage_tips": "Great for recommendations and self-descriptions. Noun: 'diligence'. Implies consistent effort.",
+        "synonyms": ["hardworking", "industrious", "conscientious"],
+        "antonyms": ["lazy", "careless", "negligent"],
+    },
     # Daily Life & Situation
-    {"word": "Accommodate", "definition": "To provide what is needed; to make room for", "category": "Daily Life", "level": "Intermediate",
-     "examples": ["The hotel can accommodate up to 200 guests.", "We'll try to accommodate your special dietary needs."],
-     "usage_tips": "Use in service, hospitality, and flexibility contexts. Shows you're adaptable.",
-     "synonyms": ["cater to", "provide for", "adjust to"], "antonyms": ["refuse", "reject"]},
-    {"word": "Authentic", "definition": "Genuine, real, and true to its origin", "category": "Daily Life", "level": "Beginner",
-     "examples": ["This restaurant serves authentic Italian food.", "Being authentic is more important than being perfect."],
-     "usage_tips": "Trendy and powerful word. Use for food, people, and experiences. Noun: 'authenticity'.",
-     "synonyms": ["genuine", "real", "original"], "antonyms": ["fake", "counterfeit", "artificial"]},
-    {"word": "Versatile", "definition": "Able to adapt to many different functions or activities", "category": "Daily Life", "level": "Intermediate",
-     "examples": ["She's a versatile employee who can handle any department.", "This tool is incredibly versatile."],
-     "usage_tips": "Perfect for resumes and product descriptions. Shows adaptability. Noun: 'versatility'.",
-     "synonyms": ["adaptable", "flexible", "multi-talented"], "antonyms": ["limited", "inflexible"]},
-    {"word": "Inevitable", "definition": "Certain to happen; unavoidable", "category": "Daily Life", "level": "Intermediate",
-     "examples": ["Change is inevitable in any growing company.", "It was inevitable that they would find out."],
-     "usage_tips": "Powerful word for expressing certainty. Adverb: 'inevitably'. Great for discussions about trends.",
-     "synonyms": ["unavoidable", "certain", "inescapable"], "antonyms": ["avoidable", "uncertain", "preventable"]},
-    {"word": "Substantial", "definition": "Of considerable importance, size, or worth", "category": "Daily Life", "level": "Intermediate",
-     "examples": ["We saw a substantial improvement in sales.", "She received a substantial pay raise."],
-     "usage_tips": "Use instead of 'big' or 'a lot' for professional contexts. Much more impactful.",
-     "synonyms": ["significant", "considerable", "sizable"], "antonyms": ["insignificant", "minimal", "trivial"]},
-    {"word": "Spontaneous", "definition": "Done without planning; natural and impulsive", "category": "Daily Life", "level": "Intermediate",
-     "examples": ["The trip was completely spontaneous.", "He's known for his spontaneous sense of humor."],
-     "usage_tips": "Positive word for describing unplanned fun. Noun: 'spontaneity'. Great for storytelling.",
-     "synonyms": ["impulsive", "unplanned", "natural"], "antonyms": ["planned", "deliberate", "calculated"]},
-
+    {
+        "word": "Accommodate",
+        "definition": "To provide what is needed; to make room for",
+        "category": "Daily Life",
+        "level": "Intermediate",
+        "examples": [
+            "The hotel can accommodate up to 200 guests.",
+            "We'll try to accommodate your special dietary needs.",
+        ],
+        "usage_tips": "Use in service, hospitality, and flexibility contexts. Shows you're adaptable.",
+        "synonyms": ["cater to", "provide for", "adjust to"],
+        "antonyms": ["refuse", "reject"],
+    },
+    {
+        "word": "Authentic",
+        "definition": "Genuine, real, and true to its origin",
+        "category": "Daily Life",
+        "level": "Beginner",
+        "examples": [
+            "This restaurant serves authentic Italian food.",
+            "Being authentic is more important than being perfect.",
+        ],
+        "usage_tips": "Trendy and powerful word. Use for food, people, and experiences. Noun: 'authenticity'.",
+        "synonyms": ["genuine", "real", "original"],
+        "antonyms": ["fake", "counterfeit", "artificial"],
+    },
+    {
+        "word": "Versatile",
+        "definition": "Able to adapt to many different functions or activities",
+        "category": "Daily Life",
+        "level": "Intermediate",
+        "examples": [
+            "She's a versatile employee who can handle any department.",
+            "This tool is incredibly versatile.",
+        ],
+        "usage_tips": "Perfect for resumes and product descriptions. Shows adaptability. Noun: 'versatility'.",
+        "synonyms": ["adaptable", "flexible", "multi-talented"],
+        "antonyms": ["limited", "inflexible"],
+    },
+    {
+        "word": "Inevitable",
+        "definition": "Certain to happen; unavoidable",
+        "category": "Daily Life",
+        "level": "Intermediate",
+        "examples": [
+            "Change is inevitable in any growing company.",
+            "It was inevitable that they would find out.",
+        ],
+        "usage_tips": "Powerful word for expressing certainty. Adverb: 'inevitably'. Great for discussions about trends.",
+        "synonyms": ["unavoidable", "certain", "inescapable"],
+        "antonyms": ["avoidable", "uncertain", "preventable"],
+    },
+    {
+        "word": "Substantial",
+        "definition": "Of considerable importance, size, or worth",
+        "category": "Daily Life",
+        "level": "Intermediate",
+        "examples": [
+            "We saw a substantial improvement in sales.",
+            "She received a substantial pay raise.",
+        ],
+        "usage_tips": "Use instead of 'big' or 'a lot' for professional contexts. Much more impactful.",
+        "synonyms": ["significant", "considerable", "sizable"],
+        "antonyms": ["insignificant", "minimal", "trivial"],
+    },
+    {
+        "word": "Spontaneous",
+        "definition": "Done without planning; natural and impulsive",
+        "category": "Daily Life",
+        "level": "Intermediate",
+        "examples": [
+            "The trip was completely spontaneous.",
+            "He's known for his spontaneous sense of humor.",
+        ],
+        "usage_tips": "Positive word for describing unplanned fun. Noun: 'spontaneity'. Great for storytelling.",
+        "synonyms": ["impulsive", "unplanned", "natural"],
+        "antonyms": ["planned", "deliberate", "calculated"],
+    },
     # Descriptive & Advanced
-    {"word": "Ubiquitous", "definition": "Present, appearing, or found everywhere", "category": "Descriptive", "level": "Advanced",
-     "examples": ["Smartphones have become ubiquitous in modern life.", "Coffee shops are ubiquitous in this city."],
-     "usage_tips": "Impressive vocabulary word. Pronounced 'yoo-BIK-wit-us'. Use to describe things that are everywhere.",
-     "synonyms": ["omnipresent", "widespread", "pervasive"], "antonyms": ["rare", "scarce"]},
-    {"word": "Profound", "definition": "Very great or intense; having deep insight", "category": "Descriptive", "level": "Intermediate",
-     "examples": ["The book had a profound impact on my thinking.", "She offered a profound observation about human nature."],
-     "usage_tips": "Use for deep, meaningful things. Stronger than 'deep'. Adverb: 'profoundly'.",
-     "synonyms": ["deep", "intense", "significant"], "antonyms": ["shallow", "superficial", "trivial"]},
-    {"word": "Eloquence", "definition": "Fluent or persuasive speaking or writing", "category": "Descriptive", "level": "Advanced",
-     "examples": ["Her eloquence moved the entire audience to tears.", "He spoke with great eloquence about the need for change."],
-     "usage_tips": "Adjective: 'eloquent'. One of the highest compliments for a communicator.",
-     "synonyms": ["articulacy", "expressiveness", "fluency"], "antonyms": ["incoherence", "awkwardness"]},
-    {"word": "Impeccable", "definition": "Without faults or mistakes; flawless", "category": "Descriptive", "level": "Advanced",
-     "examples": ["Her English is impeccable.", "The hotel provided impeccable service."],
-     "usage_tips": "Strong compliment. Often used with 'taste', 'manners', 'timing', 'record'. Very impressive word.",
-     "synonyms": ["flawless", "perfect", "faultless"], "antonyms": ["flawed", "imperfect", "faulty"]},
-    {"word": "Tenacious", "definition": "Holding firmly to something; persistent and determined", "category": "Descriptive", "level": "Advanced",
-     "examples": ["She's a tenacious negotiator who never gives up.", "His tenacious spirit inspired the whole team."],
-     "usage_tips": "Powerfully positive. Noun: 'tenacity'. Great for describing determination in interviews.",
-     "synonyms": ["persistent", "determined", "relentless"], "antonyms": ["yielding", "weak-willed"]},
-    {"word": "Serendipity", "definition": "Finding something good without looking for it; a happy accident", "category": "Descriptive", "level": "Advanced",
-     "examples": ["Meeting her was pure serendipity.", "Many scientific discoveries were made through serendipity."],
-     "usage_tips": "Beautiful, rare word that impresses. Adjective: 'serendipitous'. Great for storytelling.",
-     "synonyms": ["luck", "chance", "fortune"], "antonyms": ["misfortune", "bad luck"]},
+    {
+        "word": "Ubiquitous",
+        "definition": "Present, appearing, or found everywhere",
+        "category": "Descriptive",
+        "level": "Advanced",
+        "examples": [
+            "Smartphones have become ubiquitous in modern life.",
+            "Coffee shops are ubiquitous in this city.",
+        ],
+        "usage_tips": "Impressive vocabulary word. Pronounced 'yoo-BIK-wit-us'. Use to describe things that are everywhere.",
+        "synonyms": ["omnipresent", "widespread", "pervasive"],
+        "antonyms": ["rare", "scarce"],
+    },
+    {
+        "word": "Profound",
+        "definition": "Very great or intense; having deep insight",
+        "category": "Descriptive",
+        "level": "Intermediate",
+        "examples": [
+            "The book had a profound impact on my thinking.",
+            "She offered a profound observation about human nature.",
+        ],
+        "usage_tips": "Use for deep, meaningful things. Stronger than 'deep'. Adverb: 'profoundly'.",
+        "synonyms": ["deep", "intense", "significant"],
+        "antonyms": ["shallow", "superficial", "trivial"],
+    },
+    {
+        "word": "Eloquence",
+        "definition": "Fluent or persuasive speaking or writing",
+        "category": "Descriptive",
+        "level": "Advanced",
+        "examples": [
+            "Her eloquence moved the entire audience to tears.",
+            "He spoke with great eloquence about the need for change.",
+        ],
+        "usage_tips": "Adjective: 'eloquent'. One of the highest compliments for a communicator.",
+        "synonyms": ["articulacy", "expressiveness", "fluency"],
+        "antonyms": ["incoherence", "awkwardness"],
+    },
+    {
+        "word": "Impeccable",
+        "definition": "Without faults or mistakes; flawless",
+        "category": "Descriptive",
+        "level": "Advanced",
+        "examples": [
+            "Her English is impeccable.",
+            "The hotel provided impeccable service.",
+        ],
+        "usage_tips": "Strong compliment. Often used with 'taste', 'manners', 'timing', 'record'. Very impressive word.",
+        "synonyms": ["flawless", "perfect", "faultless"],
+        "antonyms": ["flawed", "imperfect", "faulty"],
+    },
+    {
+        "word": "Tenacious",
+        "definition": "Holding firmly to something; persistent and determined",
+        "category": "Descriptive",
+        "level": "Advanced",
+        "examples": [
+            "She's a tenacious negotiator who never gives up.",
+            "His tenacious spirit inspired the whole team.",
+        ],
+        "usage_tips": "Powerfully positive. Noun: 'tenacity'. Great for describing determination in interviews.",
+        "synonyms": ["persistent", "determined", "relentless"],
+        "antonyms": ["yielding", "weak-willed"],
+    },
+    {
+        "word": "Serendipity",
+        "definition": "Finding something good without looking for it; a happy accident",
+        "category": "Descriptive",
+        "level": "Advanced",
+        "examples": [
+            "Meeting her was pure serendipity.",
+            "Many scientific discoveries were made through serendipity.",
+        ],
+        "usage_tips": "Beautiful, rare word that impresses. Adjective: 'serendipitous'. Great for storytelling.",
+        "synonyms": ["luck", "chance", "fortune"],
+        "antonyms": ["misfortune", "bad luck"],
+    },
 ]
+
 
 def get_daily_vocab_words(target_date=None):
     """Returns 12 vocabulary words for the given date, rotating daily."""
@@ -520,19 +1003,81 @@ def get_daily_vocab_words(target_date=None):
         selected.append(remaining.pop(0))
     return selected[:12]
 
+
 # --- Daily Challenges ---
 DAILY_CHALLENGES = [
-    {"id": 1, "title": "Describe Your Morning", "description": "Describe your morning routine in detail using at least 5 sentences.", "xp_reward": 50, "type": "speaking"},
-    {"id": 2, "title": "Persuade Me", "description": "Convince someone to start exercising regularly. Be persuasive!", "xp_reward": 75, "type": "speaking"},
-    {"id": 3, "title": "Explain a Concept", "description": "Explain how the internet works to a 10-year-old child.", "xp_reward": 60, "type": "speaking"},
-    {"id": 4, "title": "Tell a Joke", "description": "Tell a funny story or joke in English. Make it entertaining!", "xp_reward": 40, "type": "speaking"},
-    {"id": 5, "title": "Formal Email", "description": "Compose a formal email requesting a meeting with your manager.", "xp_reward": 65, "type": "writing"},
-    {"id": 6, "title": "News Reporter", "description": "Report a breaking news story about a positive event in your city.", "xp_reward": 70, "type": "speaking"},
-    {"id": 7, "title": "Apology Speech", "description": "Give a sincere apology for arriving late to an important meeting.", "xp_reward": 55, "type": "speaking"},
-    {"id": 8, "title": "Product Review", "description": "Give a detailed review of your favorite gadget or app.", "xp_reward": 50, "type": "speaking"},
-    {"id": 9, "title": "Travel Guide", "description": "Describe your favorite vacation destination to attract visitors.", "xp_reward": 60, "type": "speaking"},
-    {"id": 10, "title": "Debate: AI in Education", "description": "Argue whether AI should be used to replace teachers.", "xp_reward": 80, "type": "speaking"},
+    {
+        "id": 1,
+        "title": "Describe Your Morning",
+        "description": "Describe your morning routine in detail using at least 5 sentences.",
+        "xp_reward": 50,
+        "type": "speaking",
+    },
+    {
+        "id": 2,
+        "title": "Persuade Me",
+        "description": "Convince someone to start exercising regularly. Be persuasive!",
+        "xp_reward": 75,
+        "type": "speaking",
+    },
+    {
+        "id": 3,
+        "title": "Explain a Concept",
+        "description": "Explain how the internet works to a 10-year-old child.",
+        "xp_reward": 60,
+        "type": "speaking",
+    },
+    {
+        "id": 4,
+        "title": "Tell a Joke",
+        "description": "Tell a funny story or joke in English. Make it entertaining!",
+        "xp_reward": 40,
+        "type": "speaking",
+    },
+    {
+        "id": 5,
+        "title": "Formal Email",
+        "description": "Compose a formal email requesting a meeting with your manager.",
+        "xp_reward": 65,
+        "type": "writing",
+    },
+    {
+        "id": 6,
+        "title": "News Reporter",
+        "description": "Report a breaking news story about a positive event in your city.",
+        "xp_reward": 70,
+        "type": "speaking",
+    },
+    {
+        "id": 7,
+        "title": "Apology Speech",
+        "description": "Give a sincere apology for arriving late to an important meeting.",
+        "xp_reward": 55,
+        "type": "speaking",
+    },
+    {
+        "id": 8,
+        "title": "Product Review",
+        "description": "Give a detailed review of your favorite gadget or app.",
+        "xp_reward": 50,
+        "type": "speaking",
+    },
+    {
+        "id": 9,
+        "title": "Travel Guide",
+        "description": "Describe your favorite vacation destination to attract visitors.",
+        "xp_reward": 60,
+        "type": "speaking",
+    },
+    {
+        "id": 10,
+        "title": "Debate: AI in Education",
+        "description": "Argue whether AI should be used to replace teachers.",
+        "xp_reward": 80,
+        "type": "speaking",
+    },
 ]
+
 
 # --- System Prompt ---
 def load_system_prompt():
@@ -543,14 +1088,16 @@ def load_system_prompt():
     except FileNotFoundError:
         return "You are a helpful English tutor named Miss Nova."
 
+
 SYSTEM_PROMPT = load_system_prompt()
+
 
 def get_language_prompt(ud=None):
     """Get the language-specific system prompt suffix based on user's selected language."""
     if ud is None:
         ud = user_data
     lang = ud.get("user_preferences", {}).get("learning_language", "english")
-    lang_config = LANGUAGES.get(lang) if 'LANGUAGES' in dir() else None
+    lang_config = LANGUAGES.get(lang) if "LANGUAGES" in dir() else None
     # LANGUAGES is defined later in the file, use a fallback lookup
     lang_suffixes = {
         "english": "You are an English language tutor. Help the learner practice English conversation.",
@@ -566,20 +1113,23 @@ def get_language_prompt(ud=None):
     }
     return lang_suffixes.get(lang, lang_suffixes["english"])
 
+
 def get_current_language(ud=None):
     """Get the user's current learning language code."""
     if ud is None:
         ud = user_data
     return ud.get("user_preferences", {}).get("learning_language", "english")
 
+
 def parse_ai_response(raw_text: str) -> dict:
-    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_text, re.DOTALL)
+    json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
     if json_match:
         return json.loads(json_match.group(1))
-    json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+    json_match = re.search(r"\{.*\}", raw_text, re.DOTALL)
     if json_match:
         return json.loads(json_match.group(0))
     raise ValueError(f"Could not parse JSON from AI response: {raw_text[:200]}")
+
 
 def calculate_level(xp):
     level = 1
@@ -601,30 +1151,44 @@ def get_xp_multiplier(data):
     streak = data.get("streak_days", 0)
     if streak >= 30:
         multiplier += 1.5
-        breakdown.append({"type": "streak_30", "label": "30+ Day Streak", "bonus": "2.5x"})
+        breakdown.append(
+            {"type": "streak_30", "label": "30+ Day Streak", "bonus": "2.5x"}
+        )
     elif streak >= 14:
         multiplier += 1.0
-        breakdown.append({"type": "streak_14", "label": "14+ Day Streak", "bonus": "2.0x"})
+        breakdown.append(
+            {"type": "streak_14", "label": "14+ Day Streak", "bonus": "2.0x"}
+        )
     elif streak >= 7:
         multiplier += 0.5
-        breakdown.append({"type": "streak_7", "label": "7+ Day Streak", "bonus": "1.5x"})
+        breakdown.append(
+            {"type": "streak_7", "label": "7+ Day Streak", "bonus": "1.5x"}
+        )
     elif streak >= 3:
         multiplier += 0.25
-        breakdown.append({"type": "streak_3", "label": "3+ Day Streak", "bonus": "1.25x"})
+        breakdown.append(
+            {"type": "streak_3", "label": "3+ Day Streak", "bonus": "1.25x"}
+        )
 
     # Time-of-day bonus
     hour = datetime.now().hour
     if 5 <= hour < 9:
         multiplier += 0.25
-        breakdown.append({"type": "early_bird", "label": "Early Bird Bonus", "bonus": "+25%"})
+        breakdown.append(
+            {"type": "early_bird", "label": "Early Bird Bonus", "bonus": "+25%"}
+        )
     elif hour >= 21:
         multiplier += 0.1
-        breakdown.append({"type": "night_owl", "label": "Night Study Bonus", "bonus": "+10%"})
+        breakdown.append(
+            {"type": "night_owl", "label": "Night Study Bonus", "bonus": "+10%"}
+        )
 
     # Weekend bonus
     if date.today().weekday() >= 5:
         multiplier += 0.15
-        breakdown.append({"type": "weekend", "label": "Weekend Warrior", "bonus": "+15%"})
+        breakdown.append(
+            {"type": "weekend", "label": "Weekend Warrior", "bonus": "+15%"}
+        )
 
     return round(multiplier, 2), breakdown
 
@@ -661,77 +1225,458 @@ def check_and_award_badges(data):
 
     potential_badges = [
         # --- Session milestones (tiered) ---
-        {"id": "first_chat", "name": "First Words", "icon": "🎯", "description": "Complete your first conversation", "rarity": "common", "xp_reward": 10, "condition": sessions >= 1},
-        {"id": "10_sessions", "name": "Chatterbox", "icon": "💬", "description": "Complete 10 conversations", "rarity": "common", "xp_reward": 25, "condition": sessions >= 10},
-        {"id": "25_sessions", "name": "Talkative", "icon": "🗣️", "description": "Complete 25 conversations", "rarity": "uncommon", "xp_reward": 50, "condition": sessions >= 25},
-        {"id": "50_sessions", "name": "Conversation Master", "icon": "👑", "description": "Complete 50 conversations", "rarity": "rare", "xp_reward": 100, "condition": sessions >= 50},
-        {"id": "100_sessions", "name": "Centurion Speaker", "icon": "🏛️", "description": "Complete 100 conversations", "rarity": "epic", "xp_reward": 200, "condition": sessions >= 100},
-        {"id": "500_sessions", "name": "Legendary Orator", "icon": "🎭", "description": "Complete 500 conversations", "rarity": "legendary", "xp_reward": 500, "condition": sessions >= 500},
-
+        {
+            "id": "first_chat",
+            "name": "First Words",
+            "icon": "🎯",
+            "description": "Complete your first conversation",
+            "rarity": "common",
+            "xp_reward": 10,
+            "condition": sessions >= 1,
+        },
+        {
+            "id": "10_sessions",
+            "name": "Chatterbox",
+            "icon": "💬",
+            "description": "Complete 10 conversations",
+            "rarity": "common",
+            "xp_reward": 25,
+            "condition": sessions >= 10,
+        },
+        {
+            "id": "25_sessions",
+            "name": "Talkative",
+            "icon": "🗣️",
+            "description": "Complete 25 conversations",
+            "rarity": "uncommon",
+            "xp_reward": 50,
+            "condition": sessions >= 25,
+        },
+        {
+            "id": "50_sessions",
+            "name": "Conversation Master",
+            "icon": "👑",
+            "description": "Complete 50 conversations",
+            "rarity": "rare",
+            "xp_reward": 100,
+            "condition": sessions >= 50,
+        },
+        {
+            "id": "100_sessions",
+            "name": "Centurion Speaker",
+            "icon": "🏛️",
+            "description": "Complete 100 conversations",
+            "rarity": "epic",
+            "xp_reward": 200,
+            "condition": sessions >= 100,
+        },
+        {
+            "id": "500_sessions",
+            "name": "Legendary Orator",
+            "icon": "🎭",
+            "description": "Complete 500 conversations",
+            "rarity": "legendary",
+            "xp_reward": 500,
+            "condition": sessions >= 500,
+        },
         # --- Words spoken milestones ---
-        {"id": "100_words", "name": "Word Explorer", "icon": "📝", "description": "Speak 100 words", "rarity": "common", "xp_reward": 15, "condition": words >= 100},
-        {"id": "500_words", "name": "Word Collector", "icon": "📄", "description": "Speak 500 words", "rarity": "uncommon", "xp_reward": 30, "condition": words >= 500},
-        {"id": "1000_words", "name": "Wordsmith", "icon": "✍️", "description": "Speak 1,000 words", "rarity": "rare", "xp_reward": 75, "condition": words >= 1000},
-        {"id": "5000_words", "name": "Eloquent Speaker", "icon": "🎙️", "description": "Speak 5,000 words", "rarity": "epic", "xp_reward": 150, "condition": words >= 5000},
-        {"id": "10000_words", "name": "Word Titan", "icon": "⚔️", "description": "Speak 10,000 words", "rarity": "legendary", "xp_reward": 300, "condition": words >= 10000},
-
+        {
+            "id": "100_words",
+            "name": "Word Explorer",
+            "icon": "📝",
+            "description": "Speak 100 words",
+            "rarity": "common",
+            "xp_reward": 15,
+            "condition": words >= 100,
+        },
+        {
+            "id": "500_words",
+            "name": "Word Collector",
+            "icon": "📄",
+            "description": "Speak 500 words",
+            "rarity": "uncommon",
+            "xp_reward": 30,
+            "condition": words >= 500,
+        },
+        {
+            "id": "1000_words",
+            "name": "Wordsmith",
+            "icon": "✍️",
+            "description": "Speak 1,000 words",
+            "rarity": "rare",
+            "xp_reward": 75,
+            "condition": words >= 1000,
+        },
+        {
+            "id": "5000_words",
+            "name": "Eloquent Speaker",
+            "icon": "🎙️",
+            "description": "Speak 5,000 words",
+            "rarity": "epic",
+            "xp_reward": 150,
+            "condition": words >= 5000,
+        },
+        {
+            "id": "10000_words",
+            "name": "Word Titan",
+            "icon": "⚔️",
+            "description": "Speak 10,000 words",
+            "rarity": "legendary",
+            "xp_reward": 300,
+            "condition": words >= 10000,
+        },
         # --- Streak milestones (tiered) ---
-        {"id": "streak_3", "name": "Consistent", "icon": "🔥", "description": "3-day practice streak", "rarity": "common", "xp_reward": 15, "condition": streak >= 3},
-        {"id": "streak_7", "name": "Dedicated", "icon": "⚡", "description": "7-day practice streak", "rarity": "uncommon", "xp_reward": 35, "condition": streak >= 7},
-        {"id": "streak_14", "name": "Fortnight Fighter", "icon": "🛡️", "description": "14-day practice streak", "rarity": "rare", "xp_reward": 75, "condition": streak >= 14},
-        {"id": "streak_30", "name": "Unstoppable", "icon": "🏆", "description": "30-day practice streak", "rarity": "epic", "xp_reward": 150, "condition": streak >= 30},
-        {"id": "streak_60", "name": "Iron Will", "icon": "💎", "description": "60-day practice streak", "rarity": "epic", "xp_reward": 300, "condition": streak >= 60},
-        {"id": "streak_100", "name": "Streak Legend", "icon": "👑", "description": "100-day practice streak", "rarity": "legendary", "xp_reward": 500, "condition": streak >= 100},
-        {"id": "streak_365", "name": "Year of Mastery", "icon": "🌟", "description": "365-day practice streak!", "rarity": "legendary", "xp_reward": 2000, "condition": streak >= 365},
-
+        {
+            "id": "streak_3",
+            "name": "Consistent",
+            "icon": "🔥",
+            "description": "3-day practice streak",
+            "rarity": "common",
+            "xp_reward": 15,
+            "condition": streak >= 3,
+        },
+        {
+            "id": "streak_7",
+            "name": "Dedicated",
+            "icon": "⚡",
+            "description": "7-day practice streak",
+            "rarity": "uncommon",
+            "xp_reward": 35,
+            "condition": streak >= 7,
+        },
+        {
+            "id": "streak_14",
+            "name": "Fortnight Fighter",
+            "icon": "🛡️",
+            "description": "14-day practice streak",
+            "rarity": "rare",
+            "xp_reward": 75,
+            "condition": streak >= 14,
+        },
+        {
+            "id": "streak_30",
+            "name": "Unstoppable",
+            "icon": "🏆",
+            "description": "30-day practice streak",
+            "rarity": "epic",
+            "xp_reward": 150,
+            "condition": streak >= 30,
+        },
+        {
+            "id": "streak_60",
+            "name": "Iron Will",
+            "icon": "💎",
+            "description": "60-day practice streak",
+            "rarity": "epic",
+            "xp_reward": 300,
+            "condition": streak >= 60,
+        },
+        {
+            "id": "streak_100",
+            "name": "Streak Legend",
+            "icon": "👑",
+            "description": "100-day practice streak",
+            "rarity": "legendary",
+            "xp_reward": 500,
+            "condition": streak >= 100,
+        },
+        {
+            "id": "streak_365",
+            "name": "Year of Mastery",
+            "icon": "🌟",
+            "description": "365-day practice streak!",
+            "rarity": "legendary",
+            "xp_reward": 2000,
+            "condition": streak >= 365,
+        },
         # --- Fluency / accuracy ---
-        {"id": "high_score", "name": "Perfect Score", "icon": "💯", "description": "Get a 10/10 fluency score", "rarity": "uncommon", "xp_reward": 30, "condition": 10 in accuracy},
-        {"id": "five_perfect", "name": "Perfectionist", "icon": "✨", "description": "Get five 10/10 fluency scores", "rarity": "rare", "xp_reward": 75, "condition": accuracy.count(10) >= 5},
-        {"id": "avg_8plus", "name": "Consistent Excellence", "icon": "📊", "description": "Maintain 8+ avg fluency over 20 sessions", "rarity": "epic", "xp_reward": 100, "condition": len(accuracy) >= 20 and sum(accuracy[-20:]) / 20 >= 8},
-
+        {
+            "id": "high_score",
+            "name": "Perfect Score",
+            "icon": "💯",
+            "description": "Get a 10/10 fluency score",
+            "rarity": "uncommon",
+            "xp_reward": 30,
+            "condition": 10 in accuracy,
+        },
+        {
+            "id": "five_perfect",
+            "name": "Perfectionist",
+            "icon": "✨",
+            "description": "Get five 10/10 fluency scores",
+            "rarity": "rare",
+            "xp_reward": 75,
+            "condition": accuracy.count(10) >= 5,
+        },
+        {
+            "id": "avg_8plus",
+            "name": "Consistent Excellence",
+            "icon": "📊",
+            "description": "Maintain 8+ avg fluency over 20 sessions",
+            "rarity": "epic",
+            "xp_reward": 100,
+            "condition": len(accuracy) >= 20 and sum(accuracy[-20:]) / 20 >= 8,
+        },
         # --- Vocabulary ---
-        {"id": "vocab_10", "name": "Vocab Builder", "icon": "📚", "description": "Learn 10 new words", "rarity": "common", "xp_reward": 20, "condition": vocab_count >= 10},
-        {"id": "vocab_25", "name": "Word Hoarder", "icon": "🗃️", "description": "Learn 25 new words", "rarity": "uncommon", "xp_reward": 40, "condition": vocab_count >= 25},
-        {"id": "vocab_50", "name": "Dictionary", "icon": "📖", "description": "Learn 50 new words", "rarity": "rare", "xp_reward": 80, "condition": vocab_count >= 50},
-        {"id": "vocab_100", "name": "Lexicon Master", "icon": "🏫", "description": "Learn 100 new words", "rarity": "epic", "xp_reward": 200, "condition": vocab_count >= 100},
-
+        {
+            "id": "vocab_10",
+            "name": "Vocab Builder",
+            "icon": "📚",
+            "description": "Learn 10 new words",
+            "rarity": "common",
+            "xp_reward": 20,
+            "condition": vocab_count >= 10,
+        },
+        {
+            "id": "vocab_25",
+            "name": "Word Hoarder",
+            "icon": "🗃️",
+            "description": "Learn 25 new words",
+            "rarity": "uncommon",
+            "xp_reward": 40,
+            "condition": vocab_count >= 25,
+        },
+        {
+            "id": "vocab_50",
+            "name": "Dictionary",
+            "icon": "📖",
+            "description": "Learn 50 new words",
+            "rarity": "rare",
+            "xp_reward": 80,
+            "condition": vocab_count >= 50,
+        },
+        {
+            "id": "vocab_100",
+            "name": "Lexicon Master",
+            "icon": "🏫",
+            "description": "Learn 100 new words",
+            "rarity": "epic",
+            "xp_reward": 200,
+            "condition": vocab_count >= 100,
+        },
         # --- Scenarios ---
-        {"id": "scenario_1", "name": "Scene Stealer", "icon": "🎬", "description": "Complete your first scenario", "rarity": "common", "xp_reward": 15, "condition": scenarios >= 1},
-        {"id": "scenario_5", "name": "Role Player", "icon": "🎭", "description": "Try 5 different scenarios", "rarity": "uncommon", "xp_reward": 40, "condition": scenarios >= 5},
-        {"id": "scenario_20", "name": "Drama King/Queen", "icon": "👸", "description": "Complete 20 scenarios", "rarity": "rare", "xp_reward": 100, "condition": scenarios >= 20},
-
+        {
+            "id": "scenario_1",
+            "name": "Scene Stealer",
+            "icon": "🎬",
+            "description": "Complete your first scenario",
+            "rarity": "common",
+            "xp_reward": 15,
+            "condition": scenarios >= 1,
+        },
+        {
+            "id": "scenario_5",
+            "name": "Role Player",
+            "icon": "🎭",
+            "description": "Try 5 different scenarios",
+            "rarity": "uncommon",
+            "xp_reward": 40,
+            "condition": scenarios >= 5,
+        },
+        {
+            "id": "scenario_20",
+            "name": "Drama King/Queen",
+            "icon": "👸",
+            "description": "Complete 20 scenarios",
+            "rarity": "rare",
+            "xp_reward": 100,
+            "condition": scenarios >= 20,
+        },
         # --- Tongue twisters ---
-        {"id": "twister_1", "name": "Twisted Tongue", "icon": "😜", "description": "Complete your first tongue twister", "rarity": "common", "xp_reward": 10, "condition": twisters >= 1},
-        {"id": "twister_5", "name": "Tongue Master", "icon": "👅", "description": "Complete 5 tongue twisters", "rarity": "uncommon", "xp_reward": 30, "condition": twisters >= 5},
-        {"id": "twister_20", "name": "Articulation Pro", "icon": "🎤", "description": "Complete 20 tongue twisters", "rarity": "rare", "xp_reward": 75, "condition": twisters >= 20},
-
+        {
+            "id": "twister_1",
+            "name": "Twisted Tongue",
+            "icon": "😜",
+            "description": "Complete your first tongue twister",
+            "rarity": "common",
+            "xp_reward": 10,
+            "condition": twisters >= 1,
+        },
+        {
+            "id": "twister_5",
+            "name": "Tongue Master",
+            "icon": "👅",
+            "description": "Complete 5 tongue twisters",
+            "rarity": "uncommon",
+            "xp_reward": 30,
+            "condition": twisters >= 5,
+        },
+        {
+            "id": "twister_20",
+            "name": "Articulation Pro",
+            "icon": "🎤",
+            "description": "Complete 20 tongue twisters",
+            "rarity": "rare",
+            "xp_reward": 75,
+            "condition": twisters >= 20,
+        },
         # --- Level milestones ---
-        {"id": "level_3", "name": "Getting Started", "icon": "🌱", "description": "Reach Level 3", "rarity": "common", "xp_reward": 20, "condition": level >= 3},
-        {"id": "level_5", "name": "Rising Star", "icon": "⭐", "description": "Reach Level 5", "rarity": "uncommon", "xp_reward": 40, "condition": level >= 5},
-        {"id": "level_10", "name": "Communication Pro", "icon": "🌟", "description": "Reach Level 10", "rarity": "rare", "xp_reward": 100, "condition": level >= 10},
-        {"id": "level_20", "name": "Language Virtuoso", "icon": "💫", "description": "Reach Level 20", "rarity": "epic", "xp_reward": 250, "condition": level >= 20},
-        {"id": "level_50", "name": "Grand Master", "icon": "👑", "description": "Reach Level 50", "rarity": "legendary", "xp_reward": 1000, "condition": level >= 50},
-
+        {
+            "id": "level_3",
+            "name": "Getting Started",
+            "icon": "🌱",
+            "description": "Reach Level 3",
+            "rarity": "common",
+            "xp_reward": 20,
+            "condition": level >= 3,
+        },
+        {
+            "id": "level_5",
+            "name": "Rising Star",
+            "icon": "⭐",
+            "description": "Reach Level 5",
+            "rarity": "uncommon",
+            "xp_reward": 40,
+            "condition": level >= 5,
+        },
+        {
+            "id": "level_10",
+            "name": "Communication Pro",
+            "icon": "🌟",
+            "description": "Reach Level 10",
+            "rarity": "rare",
+            "xp_reward": 100,
+            "condition": level >= 10,
+        },
+        {
+            "id": "level_20",
+            "name": "Language Virtuoso",
+            "icon": "💫",
+            "description": "Reach Level 20",
+            "rarity": "epic",
+            "xp_reward": 250,
+            "condition": level >= 20,
+        },
+        {
+            "id": "level_50",
+            "name": "Grand Master",
+            "icon": "👑",
+            "description": "Reach Level 50",
+            "rarity": "legendary",
+            "xp_reward": 1000,
+            "condition": level >= 50,
+        },
         # --- XP milestones ---
-        {"id": "xp_500", "name": "XP Hunter", "icon": "🎯", "description": "Earn 500 total XP", "rarity": "common", "xp_reward": 25, "condition": xp >= 500},
-        {"id": "xp_2000", "name": "XP Machine", "icon": "⚙️", "description": "Earn 2,000 total XP", "rarity": "uncommon", "xp_reward": 50, "condition": xp >= 2000},
-        {"id": "xp_5000", "name": "XP Dominator", "icon": "🚀", "description": "Earn 5,000 total XP", "rarity": "rare", "xp_reward": 100, "condition": xp >= 5000},
-        {"id": "xp_20000", "name": "XP Overlord", "icon": "🌍", "description": "Earn 20,000 total XP", "rarity": "legendary", "xp_reward": 500, "condition": xp >= 20000},
-
+        {
+            "id": "xp_500",
+            "name": "XP Hunter",
+            "icon": "🎯",
+            "description": "Earn 500 total XP",
+            "rarity": "common",
+            "xp_reward": 25,
+            "condition": xp >= 500,
+        },
+        {
+            "id": "xp_2000",
+            "name": "XP Machine",
+            "icon": "⚙️",
+            "description": "Earn 2,000 total XP",
+            "rarity": "uncommon",
+            "xp_reward": 50,
+            "condition": xp >= 2000,
+        },
+        {
+            "id": "xp_5000",
+            "name": "XP Dominator",
+            "icon": "🚀",
+            "description": "Earn 5,000 total XP",
+            "rarity": "rare",
+            "xp_reward": 100,
+            "condition": xp >= 5000,
+        },
+        {
+            "id": "xp_20000",
+            "name": "XP Overlord",
+            "icon": "🌍",
+            "description": "Earn 20,000 total XP",
+            "rarity": "legendary",
+            "xp_reward": 500,
+            "condition": xp >= 20000,
+        },
         # --- Daily challenge badges ---
-        {"id": "daily_1", "name": "Challenge Accepted", "icon": "🎪", "description": "Complete your first daily challenge", "rarity": "common", "xp_reward": 15, "condition": daily_challenge_count >= 1},
-        {"id": "daily_7", "name": "Weekly Warrior", "icon": "⚔️", "description": "Complete 7 daily challenges", "rarity": "uncommon", "xp_reward": 50, "condition": daily_challenge_count >= 7},
-        {"id": "daily_30", "name": "Monthly Champion", "icon": "🥇", "description": "Complete 30 daily challenges", "rarity": "rare", "xp_reward": 150, "condition": daily_challenge_count >= 30},
-
+        {
+            "id": "daily_1",
+            "name": "Challenge Accepted",
+            "icon": "🎪",
+            "description": "Complete your first daily challenge",
+            "rarity": "common",
+            "xp_reward": 15,
+            "condition": daily_challenge_count >= 1,
+        },
+        {
+            "id": "daily_7",
+            "name": "Weekly Warrior",
+            "icon": "⚔️",
+            "description": "Complete 7 daily challenges",
+            "rarity": "uncommon",
+            "xp_reward": 50,
+            "condition": daily_challenge_count >= 7,
+        },
+        {
+            "id": "daily_30",
+            "name": "Monthly Champion",
+            "icon": "🥇",
+            "description": "Complete 30 daily challenges",
+            "rarity": "rare",
+            "xp_reward": 150,
+            "condition": daily_challenge_count >= 30,
+        },
         # --- Translation badges ---
-        {"id": "translator_1", "name": "Babel Fish", "icon": "🐠", "description": "Use the translator for the first time", "rarity": "common", "xp_reward": 10, "condition": translations >= 1},
-        {"id": "translator_20", "name": "Polyglot", "icon": "🌐", "description": "Complete 20 translations", "rarity": "uncommon", "xp_reward": 40, "condition": translations >= 20},
-        {"id": "translator_50", "name": "UN Interpreter", "icon": "🏛️", "description": "Complete 50 translations", "rarity": "rare", "xp_reward": 100, "condition": translations >= 50},
-
+        {
+            "id": "translator_1",
+            "name": "Babel Fish",
+            "icon": "🐠",
+            "description": "Use the translator for the first time",
+            "rarity": "common",
+            "xp_reward": 10,
+            "condition": translations >= 1,
+        },
+        {
+            "id": "translator_20",
+            "name": "Polyglot",
+            "icon": "🌐",
+            "description": "Complete 20 translations",
+            "rarity": "uncommon",
+            "xp_reward": 40,
+            "condition": translations >= 20,
+        },
+        {
+            "id": "translator_50",
+            "name": "UN Interpreter",
+            "icon": "🏛️",
+            "description": "Complete 50 translations",
+            "rarity": "rare",
+            "xp_reward": 100,
+            "condition": translations >= 50,
+        },
         # --- Time-based special badges ---
-        {"id": "early_bird", "name": "Early Bird", "icon": "🌅", "description": "Practice before 9 AM", "rarity": "uncommon", "xp_reward": 20, "condition": datetime.now().hour < 9 and sessions >= 1},
-        {"id": "night_owl", "name": "Night Owl", "icon": "🦉", "description": "Practice after 11 PM", "rarity": "uncommon", "xp_reward": 20, "condition": datetime.now().hour >= 23 and sessions >= 1},
-        {"id": "weekend_warrior", "name": "Weekend Warrior", "icon": "🏖️", "description": "Practice on a weekend", "rarity": "common", "xp_reward": 15, "condition": date.today().weekday() >= 5 and sessions >= 1},
+        {
+            "id": "early_bird",
+            "name": "Early Bird",
+            "icon": "🌅",
+            "description": "Practice before 9 AM",
+            "rarity": "uncommon",
+            "xp_reward": 20,
+            "condition": datetime.now().hour < 9 and sessions >= 1,
+        },
+        {
+            "id": "night_owl",
+            "name": "Night Owl",
+            "icon": "🦉",
+            "description": "Practice after 11 PM",
+            "rarity": "uncommon",
+            "xp_reward": 20,
+            "condition": datetime.now().hour >= 23 and sessions >= 1,
+        },
+        {
+            "id": "weekend_warrior",
+            "name": "Weekend Warrior",
+            "icon": "🏖️",
+            "description": "Practice on a weekend",
+            "rarity": "common",
+            "xp_reward": 15,
+            "condition": date.today().weekday() >= 5 and sessions >= 1,
+        },
     ]
 
     new_badges = []
@@ -747,6 +1692,7 @@ def check_and_award_badges(data):
 
     data["badges"] = badges
     return new_badges
+
 
 def update_streak(data):
     today = str(date.today())
@@ -790,19 +1736,22 @@ def update_streak(data):
     streak = data.get("streak_days", 0)
     last_earned = data.get("streak_freeze_last_earned", 0)
     if streak >= 7 and streak // 7 > (last_earned or 0) // 7:
-        data["streak_freeze_available"] = min(data.get("streak_freeze_available", 0) + 1, 3)
+        data["streak_freeze_available"] = min(
+            data.get("streak_freeze_available", 0) + 1, 3
+        )
         data["streak_freeze_last_earned"] = streak
 
     # Update weekly XP history
     day_of_week = date.today().weekday()
-    weekly = data.get("weekly_xp_history", [0]*7)
+    weekly = data.get("weekly_xp_history", [0] * 7)
     if len(weekly) < 7:
-        weekly = [0]*7
+        weekly = [0] * 7
     weekly[day_of_week] = data.get("xp", 0)
     data["weekly_xp_history"] = weekly
 
 
 # =========== API ENDPOINTS ===========
+
 
 @app.post("/api/process-text")
 async def process_text(input_data: TextInput, request: Request):
@@ -821,8 +1770,14 @@ async def process_text(input_data: TextInput, request: Request):
             conversation_history[:] = conversation_history[-20:]
 
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + get_language_prompt(ud) + "\n\nIMPORTANT: Always respond ONLY with valid JSON in the exact format specified. No extra text outside the JSON."},
-            *conversation_history
+            {
+                "role": "system",
+                "content": SYSTEM_PROMPT
+                + "\n\n"
+                + get_language_prompt(ud)
+                + "\n\nIMPORTANT: Always respond ONLY with valid JSON in the exact format specified. No extra text outside the JSON.",
+            },
+            *conversation_history,
         ]
 
         chat_completion = client.chat.completions.create(
@@ -854,13 +1809,15 @@ async def process_text(input_data: TextInput, request: Request):
         if new_word and new_word.get("word"):
             existing_words = [w["word"].lower() for w in ud.get("vocabulary_bank", [])]
             if new_word["word"].lower() not in existing_words:
-                ud.setdefault("vocabulary_bank", []).append({
-                    "word": new_word["word"],
-                    "definition": new_word.get("definition", ""),
-                    "example": new_word.get("example", ""),
-                    "mastery": 0,
-                    "added_at": str(datetime.now()),
-                })
+                ud.setdefault("vocabulary_bank", []).append(
+                    {
+                        "word": new_word["word"],
+                        "definition": new_word.get("definition", ""),
+                        "example": new_word.get("example", ""),
+                        "mastery": 0,
+                        "added_at": str(datetime.now()),
+                    }
+                )
 
         update_streak(ud)
         new_badges = check_and_award_badges(ud)
@@ -920,7 +1877,7 @@ IMPORTANT: Respond ONLY with valid JSON.
 """
         messages = [
             {"role": "system", "content": scenario_prompt},
-            {"role": "user", "content": user_text}
+            {"role": "user", "content": user_text},
         ]
 
         chat_completion = client.chat.completions.create(
@@ -952,13 +1909,15 @@ IMPORTANT: Respond ONLY with valid JSON.
         if new_word and new_word.get("word"):
             existing_words = [w["word"].lower() for w in ud.get("vocabulary_bank", [])]
             if new_word["word"].lower() not in existing_words:
-                ud.setdefault("vocabulary_bank", []).append({
-                    "word": new_word["word"],
-                    "definition": new_word.get("definition", ""),
-                    "example": new_word.get("example", ""),
-                    "mastery": 0,
-                    "added_at": str(datetime.now()),
-                })
+                ud.setdefault("vocabulary_bank", []).append(
+                    {
+                        "word": new_word["word"],
+                        "definition": new_word.get("definition", ""),
+                        "example": new_word.get("example", ""),
+                        "mastery": 0,
+                        "added_at": str(datetime.now()),
+                    }
+                )
 
         update_streak(ud)
         new_badges = check_and_award_badges(ud)
@@ -1068,7 +2027,10 @@ Evaluate their response and provide detailed feedback in this JSON format:
 IMPORTANT: Respond ONLY with valid JSON.
 """
         chat_completion = client.chat.completions.create(
-            messages=[{"role": "system", "content": prompt}, {"role": "user", "content": user_text}],
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": user_text},
+            ],
             model="llama-3.3-70b-versatile",
             temperature=0.7,
             max_tokens=1024,
@@ -1094,13 +2056,15 @@ IMPORTANT: Respond ONLY with valid JSON.
         if new_word and new_word.get("word"):
             existing_words = [w["word"].lower() for w in ud.get("vocabulary_bank", [])]
             if new_word["word"].lower() not in existing_words:
-                ud.setdefault("vocabulary_bank", []).append({
-                    "word": new_word["word"],
-                    "definition": new_word.get("definition", ""),
-                    "example": new_word.get("example", ""),
-                    "mastery": 0,
-                    "added_at": str(datetime.now()),
-                })
+                ud.setdefault("vocabulary_bank", []).append(
+                    {
+                        "word": new_word["word"],
+                        "definition": new_word.get("definition", ""),
+                        "example": new_word.get("example", ""),
+                        "mastery": 0,
+                        "added_at": str(datetime.now()),
+                    }
+                )
 
         update_streak(ud)
         new_badges = check_and_award_badges(ud)
@@ -1118,6 +2082,7 @@ IMPORTANT: Respond ONLY with valid JSON.
 async def get_scenarios():
     return list(SCENARIOS.values())
 
+
 @app.get("/api/scenarios/{scenario_id}")
 async def get_scenario(scenario_id: str):
     scenario = SCENARIOS.get(scenario_id)
@@ -1125,9 +2090,11 @@ async def get_scenario(scenario_id: str):
         raise HTTPException(status_code=404, detail="Scenario not found")
     return scenario
 
+
 @app.get("/api/tongue-twisters")
 async def get_tongue_twisters():
     return TONGUE_TWISTERS
+
 
 @app.get("/api/daily-challenge-info")
 async def get_daily_challenge(request: Request):
@@ -1136,7 +2103,9 @@ async def get_daily_challenge(request: Request):
     today = str(date.today())
     challenge_index = date.today().toordinal() % len(DAILY_CHALLENGES)
     challenge = DAILY_CHALLENGES[challenge_index]
-    completed = ud.get("daily_challenge_date") == today and ud.get("daily_challenge_completed", False)
+    completed = ud.get("daily_challenge_date") == today and ud.get(
+        "daily_challenge_completed", False
+    )
     return {**challenge, "completed": completed, "date": today}
 
 
@@ -1219,13 +2188,15 @@ IMPORTANT: Respond ONLY with valid JSON.
         # Add word to vocabulary bank if not already there
         existing_words = [w["word"].lower() for w in ud.get("vocabulary_bank", [])]
         if input_data.word.lower() not in existing_words:
-            ud.setdefault("vocabulary_bank", []).append({
-                "word": input_data.word,
-                "definition": input_data.definition,
-                "example": input_data.sentence,
-                "mastery": 1 if ai_data.get("correct_usage") else 0,
-                "added_at": str(datetime.now()),
-            })
+            ud.setdefault("vocabulary_bank", []).append(
+                {
+                    "word": input_data.word,
+                    "definition": input_data.definition,
+                    "example": input_data.sentence,
+                    "mastery": 1 if ai_data.get("correct_usage") else 0,
+                    "added_at": str(datetime.now()),
+                }
+            )
 
         # XP reward with multiplier
         base_xp = 15 if ai_data.get("correct_usage") else 5
@@ -1243,6 +2214,7 @@ IMPORTANT: Respond ONLY with valid JSON.
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
 
+
 @app.get("/api/stats")
 async def get_stats(request: Request):
     uid = get_user_id_from_request(request)
@@ -1256,8 +2228,7 @@ async def get_stats(request: Request):
     # Check if streak is at risk (haven't practiced today and have a streak)
     today = str(date.today())
     streak_at_risk = (
-        ud.get("streak_days", 0) > 0
-        and ud.get("last_practice_date") != today
+        ud.get("streak_days", 0) > 0 and ud.get("last_practice_date") != today
     )
 
     return {
@@ -1275,11 +2246,12 @@ async def get_stats(request: Request):
         "scenarios_completed": len(ud.get("completed_scenarios", [])),
         "tongue_twisters_completed": ud.get("tongue_twisters_completed", 0),
         "skill_scores": ud.get("skill_scores", {}),
-        "weekly_xp": ud.get("weekly_xp_history", [0]*7),
+        "weekly_xp": ud.get("weekly_xp_history", [0] * 7),
         "streak_freeze_available": ud.get("streak_freeze_available", 0),
         "streak_at_risk": streak_at_risk,
         "max_streak": ud.get("max_streak", 0),
     }
+
 
 @app.get("/api/vocabulary")
 async def get_vocabulary(request: Request):
@@ -1287,11 +2259,13 @@ async def get_vocabulary(request: Request):
     ud = load_user_progress(uid)
     return ud.get("vocabulary_bank", [])
 
+
 @app.get("/api/badges")
 async def get_badges(request: Request):
     uid = get_user_id_from_request(request)
     ud = load_user_progress(uid)
     return ud.get("badges", [])
+
 
 @app.get("/api/progress")
 async def get_progress(request: Request):
@@ -1308,7 +2282,7 @@ async def get_progress(request: Request):
         "badges": ud.get("badges", []),
         "accuracy_history": ud.get("accuracy_history", [])[-20:],
         "skill_scores": ud.get("skill_scores", {}),
-        "weekly_xp": ud.get("weekly_xp_history", [0]*7),
+        "weekly_xp": ud.get("weekly_xp_history", [0] * 7),
         "words_spoken": ud["words_spoken"],
         "session_count": ud["session_count"],
         "vocabulary_count": len(ud.get("vocabulary_bank", [])),
@@ -1316,11 +2290,13 @@ async def get_progress(request: Request):
         "total_scenarios": len(SCENARIOS),
     }
 
+
 @app.post("/api/reset")
 async def reset_session(request: Request):
     uid = get_user_id_from_request(request)
     user_conversations.pop(uid, None)
     return {"message": "Session reset successfully"}
+
 
 @app.post("/api/reset-all")
 async def reset_all_data(request: Request):
@@ -1329,6 +2305,7 @@ async def reset_all_data(request: Request):
     save_user_progress(uid, ud)
     user_conversations.pop(uid, None)
     return {"message": "All data reset successfully"}
+
 
 @app.get("/api/health")
 async def health_check():
@@ -1343,8 +2320,7 @@ async def get_streak_info(request: Request):
     ud = load_user_progress(uid)
     today = str(date.today())
     streak_at_risk = (
-        ud.get("streak_days", 0) > 0
-        and ud.get("last_practice_date") != today
+        ud.get("streak_days", 0) > 0 and ud.get("last_practice_date") != today
     )
     return {
         "streak_days": ud.get("streak_days", 0),
@@ -1362,6 +2338,7 @@ class AnalyticsEvent(BaseModel):
     properties: dict = {}
     timestamp: str = None
 
+
 @app.post("/api/track-event")
 async def track_event(event: AnalyticsEvent):
     """Receives analytics events from the frontend.
@@ -1372,6 +2349,7 @@ async def track_event(event: AnalyticsEvent):
 
 # ============= AUTH ENDPOINTS (Simplified for Guest Mode) =============
 
+
 class GuestSignup(BaseModel):
     username: str
     goals: List[str] = []
@@ -1379,14 +2357,15 @@ class GuestSignup(BaseModel):
     daily_goal_minutes: int = 10
     learning_language: str = "english"
 
+
 @app.post("/api/auth/guest-signup")
 async def guest_signup(data: GuestSignup):
     """Create a guest user account (no email/password required)"""
     user_id = f"guest_{hashlib.md5(data.username.encode()).hexdigest()[:8]}"
-    
+
     # Load or create per-user progress
     ud = load_user_progress(user_id)
-    
+
     # Store user preferences
     user_prefs = {
         "user_id": user_id,
@@ -1398,11 +2377,11 @@ async def guest_signup(data: GuestSignup):
         "created_at": datetime.utcnow().isoformat(),
         "is_guest": True,
     }
-    
+
     # Save to per-user data
     ud["user_preferences"] = user_prefs
     save_user_progress(user_id, ud)
-    
+
     return {
         "message": "Guest account created",
         "user": {
@@ -1423,6 +2402,7 @@ async def logout():
 
 # ============= LEADERBOARD ENDPOINTS =============
 
+
 @app.get("/api/leaderboard")
 async def get_leaderboard(request: Request, limit: int = 10):
     """Get global leaderboard (simulated for demo)"""
@@ -1435,28 +2415,88 @@ async def get_leaderboard(request: Request, limit: int = 10):
         "level": calculate_level(ud.get("xp", 0))[0],
         "streak_days": ud.get("streak_days", 0),
     }
-    
+
     # Mock other users for demo
     mock_users = [
-        {"rank": 1, "username": "LanguageMaster", "xp_total": 15000, "level": 38, "streak_days": 45},
-        {"rank": 2, "username": "FluentSpeaker", "xp_total": 12500, "level": 35, "streak_days": 30},
-        {"rank": 3, "username": "WordNinja", "xp_total": 10000, "level": 31, "streak_days": 22},
-        {"rank": 4, "username": "VocabKing", "xp_total": 8500, "level": 29, "streak_days": 18},
-        {"rank": 5, "username": "ChatChampion", "xp_total": 7000, "level": 26, "streak_days": 15},
-        {"rank": 6, "username": "VoicePro", "xp_total": 5500, "level": 23, "streak_days": 12},
-        {"rank": 7, "username": "TalkMaster", "xp_total": 4000, "level": 20, "streak_days": 10},
-        {"rank": 8, "username": "PronouncePro", "xp_total": 3000, "level": 17, "streak_days": 8},
-        {"rank": 9, "username": "FluentLearner", "xp_total": 2000, "level": 14, "streak_days": 5},
-        {"rank": 10, "username": "NewSpeaker", "xp_total": 1000, "level": 10, "streak_days": 3},
+        {
+            "rank": 1,
+            "username": "LanguageMaster",
+            "xp_total": 15000,
+            "level": 38,
+            "streak_days": 45,
+        },
+        {
+            "rank": 2,
+            "username": "FluentSpeaker",
+            "xp_total": 12500,
+            "level": 35,
+            "streak_days": 30,
+        },
+        {
+            "rank": 3,
+            "username": "WordNinja",
+            "xp_total": 10000,
+            "level": 31,
+            "streak_days": 22,
+        },
+        {
+            "rank": 4,
+            "username": "VocabKing",
+            "xp_total": 8500,
+            "level": 29,
+            "streak_days": 18,
+        },
+        {
+            "rank": 5,
+            "username": "ChatChampion",
+            "xp_total": 7000,
+            "level": 26,
+            "streak_days": 15,
+        },
+        {
+            "rank": 6,
+            "username": "VoicePro",
+            "xp_total": 5500,
+            "level": 23,
+            "streak_days": 12,
+        },
+        {
+            "rank": 7,
+            "username": "TalkMaster",
+            "xp_total": 4000,
+            "level": 20,
+            "streak_days": 10,
+        },
+        {
+            "rank": 8,
+            "username": "PronouncePro",
+            "xp_total": 3000,
+            "level": 17,
+            "streak_days": 8,
+        },
+        {
+            "rank": 9,
+            "username": "FluentLearner",
+            "xp_total": 2000,
+            "level": 14,
+            "streak_days": 5,
+        },
+        {
+            "rank": 10,
+            "username": "NewSpeaker",
+            "xp_total": 1000,
+            "level": 10,
+            "streak_days": 3,
+        },
     ]
-    
+
     # Calculate current user's actual rank
     user_xp = ud.get("xp", 0)
     actual_rank = 1
     for u in mock_users:
         if u["xp_total"] > user_xp:
             actual_rank += 1
-    
+
     # Insert current user in correct position
     current_user_entry = {
         "rank": actual_rank,
@@ -1466,17 +2506,17 @@ async def get_leaderboard(request: Request, limit: int = 10):
         "streak_days": ud.get("streak_days", 0),
         "is_current_user": True,
     }
-    
+
     total_users = 1000 + actual_rank  # Mock total users
-    
+
     return {
         "leaderboard": mock_users[:limit],
         "current_user": current_user_entry,
         "rank": {
             "rank": actual_rank,
             "total_users": total_users,
-            "percentile": max(0, 100 - (actual_rank / total_users * 100))
-        }
+            "percentile": max(0, 100 - (actual_rank / total_users * 100)),
+        },
     }
 
 
@@ -1492,7 +2532,7 @@ LANGUAGES = {
         "system_prompt_suffix": "You are an English language tutor.",
     },
     "spanish": {
-        "code": "es", 
+        "code": "es",
         "name": "Spanish",
         "flag": "🇪🇸",
         "native": "Español",
@@ -1556,6 +2596,7 @@ LANGUAGES = {
     },
 }
 
+
 @app.get("/api/languages")
 async def get_available_languages(request: Request):
     """Get list of available languages for learning"""
@@ -1571,26 +2612,32 @@ async def get_available_languages(request: Request):
             }
             for code, lang in LANGUAGES.items()
         ],
-        "current_language": ud.get("user_preferences", {}).get("learning_language", "english"),
+        "current_language": ud.get("user_preferences", {}).get(
+            "learning_language", "english"
+        ),
     }
+
 
 @app.post("/api/set-language")
 async def set_learning_language(request: Request, language: str):
     """Set the user's current learning language"""
     if language not in LANGUAGES:
-        raise HTTPException(status_code=400, detail=f"Language '{language}' not supported")
-    
+        raise HTTPException(
+            status_code=400, detail=f"Language '{language}' not supported"
+        )
+
     uid = get_user_id_from_request(request)
     ud = load_user_progress(uid)
     if "user_preferences" not in ud:
         ud["user_preferences"] = {}
     ud["user_preferences"]["learning_language"] = language
     save_user_progress(uid, ud)
-    
+
     return {
         "message": f"Language set to {LANGUAGES[language]['name']}",
         "language": LANGUAGES[language],
     }
+
 
 @app.get("/api/daily-goal")
 async def get_daily_goal(request: Request):
@@ -1599,10 +2646,10 @@ async def get_daily_goal(request: Request):
     ud = load_user_progress(uid)
     today = str(date.today())
     daily_goal = ud.get("user_preferences", {}).get("daily_goal_minutes", 10)
-    
+
     # Calculate sessions today (simplified)
     sessions_today = 1 if ud.get("last_practice_date") == today else 0
-    
+
     return {
         "date": today,
         "target_minutes": daily_goal,
@@ -1615,9 +2662,11 @@ async def get_daily_goal(request: Request):
 
 # ============= MULTI-LANGUAGE TRANSLATION ENDPOINT =============
 
+
 class TranslateInput(BaseModel):
     text: str
     source_language: str = "auto"
+
 
 @app.post("/api/translate-input")
 async def translate_input(input_data: TranslateInput, request: Request):
@@ -1677,7 +2726,10 @@ Respond in this JSON format:
 IMPORTANT: Respond ONLY with valid JSON.
 """
         chat_completion = client.chat.completions.create(
-            messages=[{"role": "system", "content": prompt}, {"role": "user", "content": user_text}],
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": user_text},
+            ],
             model="llama-3.3-70b-versatile",
             temperature=0.5,
             max_tokens=1024,
@@ -1695,13 +2747,15 @@ IMPORTANT: Respond ONLY with valid JSON.
         existing_words = [w["word"].lower() for w in ud.get("vocabulary_bank", [])]
         for v in vocab_suggestions[:3]:  # Max 3 new words per translation
             if v.get("word") and v["word"].lower() not in existing_words:
-                ud.setdefault("vocabulary_bank", []).append({
-                    "word": v["word"],
-                    "definition": v.get("definition", ""),
-                    "example": v.get("example", ""),
-                    "mastery": 0,
-                    "added_at": str(datetime.now()),
-                })
+                ud.setdefault("vocabulary_bank", []).append(
+                    {
+                        "word": v["word"],
+                        "definition": v.get("definition", ""),
+                        "example": v.get("example", ""),
+                        "mastery": 0,
+                        "added_at": str(datetime.now()),
+                    }
+                )
                 existing_words.append(v["word"].lower())
 
         # XP for using translator
@@ -1722,11 +2776,242 @@ IMPORTANT: Respond ONLY with valid JSON.
         raise HTTPException(status_code=500, detail=f"Translation error: {str(e)}")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FEATURE 1 – Bottom Line Up Front (BLUF) Generator
+# ─────────────────────────────────────────────────────────────────────────────
+class BLUFInput(BaseModel):
+    text: str
+
+
+@app.post("/api/bluf-generator")
+async def bluf_generator(payload: BLUFInput, request: Request):
+    """Rewrites a long paragraph into 2-3 concise bullet points."""
+    if not payload.text or len(payload.text.strip()) < 20:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide a paragraph of at least 20 characters.",
+        )
+    try:
+        client = get_groq_client()
+        system_prompt = (
+            "You are a military-style communication expert who specialises in 'Bottom Line Up Front' (BLUF) writing. "
+            "Your job is to strip every rambling paragraph down to its absolute core message. "
+            "Return EXACTLY 2-3 bullet points (no more, no less). "
+            "Each bullet must be under 20 words, start with a strong verb or key noun, and contain zero filler words. "
+            "Format your response as a JSON object: "
+            '{"bullets": ["bullet 1", "bullet 2", "bullet 3"], "word_reduction": "<original_word_count> → <bluf_word_count>", '
+            '"key_action": "<the single most important action or takeaway>"}'
+        )
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": f"Convert this to BLUF format:\n\n{payload.text}",
+                },
+            ],
+            temperature=0.3,
+            max_tokens=400,
+        )
+        raw = resp.choices[0].message.content.strip()
+        # Try to parse JSON; if it fails, return raw
+        try:
+            import json as _json
+
+            data = _json.loads(raw)
+        except Exception:
+            # Fallback – extract bullets manually
+            lines = [
+                l.strip().lstrip("•-*").strip()
+                for l in raw.split("\n")
+                if l.strip() and l.strip()[0] in "•-*1234567890"
+            ]
+            data = {"bullets": lines[:3], "word_reduction": "", "key_action": ""}
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"BLUF generation error: {str(e)}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FEATURE 2 – Tone & Intent Calibrator
+# ─────────────────────────────────────────────────────────────────────────────
+class ToneCalibratorInput(BaseModel):
+    text: str
+    audience: str  # "Boss" | "Client" | "Date" | "Colleague" | "Friend" | "Investor"
+
+
+@app.post("/api/tone-calibrator")
+async def tone_calibrator(payload: ToneCalibratorInput, request: Request):
+    """Analyses a draft message for tone/clarity and returns a Clarity Score 0-100."""
+    if not payload.text or len(payload.text.strip()) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide a message of at least 10 characters.",
+        )
+    try:
+        client = get_groq_client()
+        system_prompt = (
+            "You are an expert communication coach specialising in tone analysis. "
+            f"The user is writing a message for audience: '{payload.audience}'. "
+            "Analyse the draft for: tone appropriateness, clarity, directness, emotional charge, and intent alignment. "
+            "Return ONLY a valid JSON object with this exact schema (no markdown, no extra text):\n"
+            '{"clarity_score": <integer 0-100>, '
+            '"tone_label": "<single adjective e.g. Aggressive / Passive / Professional / Casual / Vague / Warm>", '
+            '"audience_fit": "<Good Fit | Acceptable | Poor Fit>", '
+            '"issues": ["<issue 1>", "<issue 2>"], '
+            '"strengths": ["<strength 1>", "<strength 2>"], '
+            '"rewritten_suggestion": "<improved version of the message in under 60 words>", '
+            '"one_line_verdict": "<one sentence verdict e.g. This sounds too aggressive for a client>"}'
+        )
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": payload.text},
+            ],
+            temperature=0.4,
+            max_tokens=600,
+        )
+        raw = resp.choices[0].message.content.strip()
+        try:
+            import json as _json
+
+            data = _json.loads(raw)
+        except Exception:
+            data = {
+                "clarity_score": 50,
+                "tone_label": "Unknown",
+                "audience_fit": "Unknown",
+                "issues": [],
+                "strengths": [],
+                "rewritten_suggestion": raw,
+                "one_line_verdict": raw,
+            }
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tone calibration error: {str(e)}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FEATURE 3 – Active Listening Simulator
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-session conversation history for the simulator (in-memory, keyed by user+role)
+_listening_sessions: Dict[str, List[dict]] = {}
+
+
+class ListeningSimulatorStartInput(BaseModel):
+    role: str  # e.g. "Angry Customer", "Upset Partner", "Difficult Employee"
+
+
+class ListeningSimulatorReplyInput(BaseModel):
+    role: str
+    user_reply: str
+    session_id: str
+
+
+@app.post("/api/listening-simulator/start")
+async def listening_simulator_start(
+    payload: ListeningSimulatorStartInput, request: Request
+):
+    """Starts a new Active Listening Simulator session. AI opens as the chosen role."""
+    uid = get_user_id_from_request(request)
+    session_id = (
+        f"{uid}_{payload.role.replace(' ', '_')}_{int(datetime.now().timestamp())}"
+    )
+    system_prompt = (
+        f"You are roleplaying as: {payload.role}. "
+        "Begin with an emotionally charged opening statement that presents a real problem or grievance. "
+        "Keep it to 2-3 sentences. Stay fully in character. Do NOT break character."
+    )
+    try:
+        client = get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Begin the scenario."},
+            ],
+            temperature=0.8,
+            max_tokens=200,
+        )
+        opening = resp.choices[0].message.content.strip()
+        _listening_sessions[session_id] = [
+            {
+                "role": "system",
+                "content": (
+                    f"You are roleplaying as: {payload.role}. Stay in character throughout. "
+                    "Respond naturally — escalate if the user is dismissive, de-escalate if they show genuine empathy and a solution. "
+                    "After the user's THIRD response, break character ONLY to give feedback on whether they conveyed empathy and a clear solution. "
+                    "Feedback format: FEEDBACK: <your critique>. Ignore grammar — focus only on empathy and solution quality."
+                ),
+            },
+            {"role": "assistant", "content": opening},
+        ]
+        return {
+            "session_id": session_id,
+            "opening_message": opening,
+            "role": payload.role,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Simulator start error: {str(e)}")
+
+
+@app.post("/api/listening-simulator/reply")
+async def listening_simulator_reply(
+    payload: ListeningSimulatorReplyInput, request: Request
+):
+    """Send a user response in the Active Listening Simulator. AI continues the roleplay or gives feedback."""
+    if payload.session_id not in _listening_sessions:
+        raise HTTPException(
+            status_code=404, detail="Session not found. Please start a new session."
+        )
+    history = _listening_sessions[payload.session_id]
+    history.append({"role": "user", "content": payload.user_reply})
+    try:
+        client = get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=history,
+            temperature=0.7,
+            max_tokens=400,
+        )
+        ai_reply = resp.choices[0].message.content.strip()
+        history.append({"role": "assistant", "content": ai_reply})
+        _listening_sessions[payload.session_id] = history
+
+        # Detect if this is a feedback message
+        is_feedback = ai_reply.upper().startswith("FEEDBACK:")
+        user_turn = sum(1 for m in history if m["role"] == "user")
+
+        return {
+            "ai_reply": ai_reply,
+            "is_feedback": is_feedback,
+            "turn_number": user_turn,
+            "session_complete": is_feedback,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Simulator reply error: {str(e)}")
+
+
+@app.delete("/api/listening-simulator/session/{session_id}")
+async def listening_simulator_clear(session_id: str):
+    """Clear a simulator session."""
+    _listening_sessions.pop(session_id, None)
+    return {"status": "cleared"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 # --- Serve Frontend Static Files ---
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 if FRONTEND_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="static-assets")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(FRONTEND_DIR / "assets")),
+        name="static-assets",
+    )
 
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):

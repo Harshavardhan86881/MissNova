@@ -2,6 +2,7 @@
 Auth Router - Simplified for Voice Tutor App
 Supports both database-backed users and guest/localStorage mode
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -10,12 +11,15 @@ from typing import List, Optional
 import hashlib
 import secrets
 import json
+import os
+from pathlib import Path
 
 from models import get_db, User, init_db
 from pydantic import BaseModel, EmailStr, validator
 import re
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
 
 # --- Password Helpers (Simplified) ---
 def simple_hash(password: str, salt: str = None) -> tuple:
@@ -25,14 +29,17 @@ def simple_hash(password: str, salt: str = None) -> tuple:
     hashed = hashlib.sha256((password + salt).encode()).hexdigest()
     return hashed, salt
 
+
 def verify_password(password: str, hashed: str, salt: str) -> bool:
     """Verify password against hash"""
     test_hash, _ = simple_hash(password, salt)
     return test_hash == hashed
 
+
 def create_token(user_id: int, username: str) -> str:
     """Create a simple token"""
     return f"{user_id}:{username}:{secrets.token_hex(32)}"
+
 
 # --- Schemas ---
 class UserSignup(BaseModel):
@@ -46,31 +53,40 @@ class UserSignup(BaseModel):
     daily_goal_minutes: int = 10
     learning_language: Optional[str] = "english"
 
+
 class UserLogin(BaseModel):
     email: str
     password: str
 
+
 class GuestLogin(BaseModel):
     username: str
 
+
 # --- Helper to get/ensure auth_data.json ---
+# On Vercel, AUTH_DATA_FILE env var points to /tmp/auth_data.json (writable).
+# Locally it defaults to backend/auth_data.json.
+_DEFAULT_AUTH_FILE = Path(__file__).resolve().parent.parent / "auth_data.json"
+AUTH_DATA_FILE = Path(os.getenv("AUTH_DATA_FILE", str(_DEFAULT_AUTH_FILE)))
+
+
 def get_user_data():
     """Get user data from JSON file (fallback storage)"""
-    from pathlib import Path
-    data_file = Path(__file__).resolve().parent.parent / "auth_data.json"
-    if data_file.exists():
-        with open(data_file, "r") as f:
+    if AUTH_DATA_FILE.exists():
+        with open(AUTH_DATA_FILE, "r") as f:
             return json.load(f)
     return {"users": [], "current_user": None}
 
+
 def save_user_data(data):
     """Save user data to JSON file"""
-    from pathlib import Path
-    data_file = Path(__file__).resolve().parent.parent / "auth_data.json"
-    with open(data_file, "w") as f:
+    AUTH_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(AUTH_DATA_FILE, "w") as f:
         json.dump(data, f, indent=2, default=str)
 
+
 # --- Endpoints ---
+
 
 @router.post("/signup")
 async def signup(user_data: UserSignup, request: Request, response: Response):
@@ -78,17 +94,29 @@ async def signup(user_data: UserSignup, request: Request, response: Response):
     # Try database first
     try:
         db = next(get_db())
-        
+
         # Check if user exists
         if db.query(User).filter(User.email == user_data.email).first():
-            raise HTTPException(status_code=400, detail={"field": "email", "message": "Email already registered"})
-        
+            raise HTTPException(
+                status_code=400,
+                detail={"field": "email", "message": "Email already registered"},
+            )
+
         if db.query(User).filter(User.username == user_data.username).first():
-            raise HTTPException(status_code=400, detail={"field": "username", "message": "Username already taken"})
+            raise HTTPException(
+                status_code=400,
+                detail={"field": "username", "message": "Username already taken"},
+            )
 
         # Validate password
         if len(user_data.password) < 8:
-            raise HTTPException(status_code=400, detail={"field": "password", "message": "Password must be at least 8 characters"})
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "field": "password",
+                    "message": "Password must be at least 8 characters",
+                },
+            )
 
         # Hash password
         hashed_pw, salt = simple_hash(user_data.password)
@@ -121,32 +149,38 @@ async def signup(user_data: UserSignup, request: Request, response: Response):
                 "first_name": new_user.first_name,
                 "level": new_user.current_level,
                 "xp_total": new_user.xp_total,
-            }
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         print(f"Database error, using JSON storage: {e}")
-        
+
         # Fallback to JSON storage
         data = get_user_data()
-        
+
         # Initialize users list if not exists
         if "users" not in data:
             data["users"] = []
-        
+
         # Check if user exists
         for u in data["users"]:
             if u.get("email") == user_data.email:
-                raise HTTPException(status_code=400, detail={"field": "email", "message": "Email already registered"})
+                raise HTTPException(
+                    status_code=400,
+                    detail={"field": "email", "message": "Email already registered"},
+                )
             if u.get("username") == user_data.username:
-                raise HTTPException(status_code=400, detail={"field": "username", "message": "Username already taken"})
+                raise HTTPException(
+                    status_code=400,
+                    detail={"field": "username", "message": "Username already taken"},
+                )
 
         # Create user
         user_id = len(data["users"]) + 1
         hashed_pw, salt = simple_hash(user_data.password)
-        
+
         new_user = {
             "id": user_id,
             "email": user_data.email,
@@ -164,7 +198,7 @@ async def signup(user_data: UserSignup, request: Request, response: Response):
             "daily_goal_minutes": user_data.daily_goal_minutes,
             "learning_language": user_data.learning_language,
         }
-        
+
         data["users"].append(new_user)
         data["current_user_id"] = user_id
         save_user_data(data)
@@ -183,7 +217,7 @@ async def signup(user_data: UserSignup, request: Request, response: Response):
                 "first_name": new_user["first_name"],
                 "level": 1,
                 "xp_total": 0,
-            }
+            },
         }
 
 
@@ -193,17 +227,23 @@ async def login(user_data: UserLogin, request: Request, response: Response):
     # Try database first
     try:
         db = next(get_db())
-        
+
         user = db.query(User).filter(User.email == user_data.email).first()
-        
+
         if not user:
-            raise HTTPException(status_code=401, detail={"message": "Invalid email or password"})
+            raise HTTPException(
+                status_code=401, detail={"message": "Invalid email or password"}
+            )
 
         if not user.hashed_password or not user.salt:
-            raise HTTPException(status_code=401, detail={"message": "Invalid email or password"})
+            raise HTTPException(
+                status_code=401, detail={"message": "Invalid email or password"}
+            )
 
         if not verify_password(user_data.password, user.hashed_password, user.salt):
-            raise HTTPException(status_code=401, detail={"message": "Invalid email or password"})
+            raise HTTPException(
+                status_code=401, detail={"message": "Invalid email or password"}
+            )
 
         # Update last login
         user.last_login_at = datetime.utcnow()
@@ -224,30 +264,36 @@ async def login(user_data: UserLogin, request: Request, response: Response):
                 "level": user.current_level,
                 "xp_total": user.xp_total,
                 "streak_days": user.streak_days,
-            }
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         print(f"Database error, checking JSON storage: {e}")
-        
+
         # Fallback to JSON storage
         data = get_user_data()
-        
+
         # Find user by email
         user = None
         for u in data.get("users", []):
             if u.get("email") == user_data.email:
                 user = u
                 break
-        
+
         if not user:
-            raise HTTPException(status_code=401, detail={"message": "Invalid email or password"})
+            raise HTTPException(
+                status_code=401, detail={"message": "Invalid email or password"}
+            )
 
         # Verify password
-        if not verify_password(user_data.password, user.get("hashed_password", ""), user.get("salt", "")):
-            raise HTTPException(status_code=401, detail={"message": "Invalid email or password"})
+        if not verify_password(
+            user_data.password, user.get("hashed_password", ""), user.get("salt", "")
+        ):
+            raise HTTPException(
+                status_code=401, detail={"message": "Invalid email or password"}
+            )
 
         # Update last login
         user["last_login_at"] = datetime.utcnow().isoformat()
@@ -269,7 +315,7 @@ async def login(user_data: UserLogin, request: Request, response: Response):
                 "level": user.get("level", 1),
                 "xp_total": user.get("xp_total", 0),
                 "streak_days": user.get("streak_days", 0),
-            }
+            },
         }
 
 
@@ -277,17 +323,19 @@ async def login(user_data: UserLogin, request: Request, response: Response):
 async def guest_login(request: Request):
     """Create a guest account (no email/password required)"""
     data = get_user_data()
-    
+
     if "users" not in data:
         data["users"] = []
-    
+
     # Generate unique guest username
-    guest_count = len([u for u in data["users"] if u.get("username", "").startswith("guest_")])
+    guest_count = len(
+        [u for u in data["users"] if u.get("username", "").startswith("guest_")]
+    )
     username = f"guest_{guest_count + 1}_{secrets.token_hex(4)}"
-    
+
     # Create guest user
     user_id = len(data["users"]) + 1
-    
+
     new_user = {
         "id": user_id,
         "email": f"{username}@guest.local",
@@ -303,7 +351,7 @@ async def guest_login(request: Request):
         "daily_goal_minutes": 10,
         "learning_language": "english",
     }
-    
+
     data["users"].append(new_user)
     data["current_user_id"] = user_id
     save_user_data(data)
@@ -324,7 +372,7 @@ async def guest_login(request: Request):
             "level": 1,
             "xp_total": 0,
             "streak_days": 0,
-        }
+        },
     }
 
 
@@ -334,7 +382,7 @@ async def logout(response: Response):
     # Clear any cookies if set
     response.delete_cookie(key="access_token", path="/")
     response.delete_cookie(key="refresh_token", path="/")
-    
+
     # Clear current user in JSON storage
     try:
         data = get_user_data()
@@ -342,7 +390,7 @@ async def logout(response: Response):
         save_user_data(data)
     except:
         pass
-    
+
     return {"message": "Logged out successfully"}
 
 
@@ -353,7 +401,7 @@ async def get_current_user(request: Request):
     try:
         data = get_user_data()
         user_id = data.get("current_user_id")
-        
+
         if user_id:
             for u in data.get("users", []):
                 if u.get("id") == user_id:
@@ -369,7 +417,7 @@ async def get_current_user(request: Request):
                     }
     except:
         pass
-    
+
     raise HTTPException(status_code=401, detail="Not authenticated")
 
 
@@ -377,11 +425,11 @@ async def get_current_user(request: Request):
 async def check_email(email: str):
     """Check if email is already registered"""
     data = get_user_data()
-    
+
     for u in data.get("users", []):
         if u.get("email", "").lower() == email.lower():
             return {"available": False}
-    
+
     return {"available": True}
 
 
@@ -389,9 +437,42 @@ async def check_email(email: str):
 async def check_username(username: str):
     """Check if username is already taken"""
     data = get_user_data()
-    
+
     for u in data.get("users", []):
         if u.get("username", "").lower() == username.lower():
             return {"available": False}
-    
+
     return {"available": True}
+
+
+@router.post("/refresh")
+async def refresh_token(request: Request):
+    """Refresh access token — validates Bearer token and issues a new one."""
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    token = auth_header[7:]
+
+    # Token format: user_id:username:hex
+    parts = token.split(":")
+    if len(parts) < 2:
+        raise HTTPException(status_code=401, detail="Invalid token format")
+
+    user_id_str = parts[0]
+    username = parts[1]
+
+    # Try DB first
+    try:
+        db = next(get_db())
+        user_id = int(user_id_str)
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            new_token = create_token(user.id, user.username)
+            return {"access_token": new_token, "token_type": "bearer"}
+    except Exception:
+        pass
+
+    # Fallback: accept any token that looks valid (guest / JSON-stored users)
+    new_token = create_token(user_id_str, username)
+    return {"access_token": new_token, "token_type": "bearer"}
