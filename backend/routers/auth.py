@@ -150,6 +150,31 @@ async def signup(user_data: UserSignup, request: Request, response: Response):
         db.commit()
         db.refresh(new_user)
 
+        # Also backup to JSON so login can fall back to JSON on a cold-start
+        # where the ephemeral SQLite DB (/tmp) has been wiped.
+        try:
+            _data = get_user_data()
+            if "users" not in _data:
+                _data["users"] = []
+            # Only add if not already present (email uniqueness)
+            if not any(u.get("email") == new_user.email for u in _data["users"]):
+                _data["users"].append({
+                    "id": new_user.id,
+                    "email": new_user.email,
+                    "username": new_user.username,
+                    "hashed_password": hashed_pw,
+                    "salt": salt,
+                    "first_name": new_user.first_name,
+                    "last_name": new_user.last_name,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "level": 1,
+                    "xp_total": 0,
+                    "streak_days": 0,
+                })
+                save_user_data(_data)
+        except Exception as _backup_err:
+            print(f"JSON backup after DB signup failed (non-fatal): {_backup_err}")
+
         # Create tokens
         access_token = create_token(new_user.id, new_user.username)
         refresh_token = create_token(new_user.id, new_user.username)

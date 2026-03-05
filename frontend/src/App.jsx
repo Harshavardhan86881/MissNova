@@ -72,19 +72,52 @@ function App() {
     };
   }, [currentLanguage]);
 
-  // Check authentication and onboarding status on mount
+  // On mount: try a silent token refresh first.
+  // The /api/auth/refresh endpoint issues a new token from the token format itself
+  // (user_id:username:hex) — it does NOT require the database to be populated.
+  // This means even after a Vercel cold start (ephemeral DB wiped), existing
+  // sessions are silently extended instead of forcing the user to re-login.
   useEffect(() => {
-    const authenticated = isLoggedIn();
-    const onboarded = isOnboardingComplete();
+    const silentRefresh = async () => {
+      const onboarded = isOnboardingComplete();
+      let authenticated = isLoggedIn();
 
-    setIsAuthenticated(authenticated);
+      // If we have ANY token (even expired), try to silently refresh it.
+      // This resets the 30-day client-side expiry without a visible login screen.
+      try {
+        const raw = localStorage.getItem('voice_tutor_auth');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.accessToken) {
+            const res = await fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${parsed.accessToken}` },
+            });
+            if (res.ok) {
+              const data = await res.json();
+              // Update localStorage with new token + 30-day expiry
+              localStorage.setItem('voice_tutor_auth', JSON.stringify({
+                ...parsed,
+                accessToken: data.access_token,
+                expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+              }));
+              authenticated = true;
+            }
+          }
+        }
+      } catch (_) {
+        // Refresh failed — fall back to the local expiry check below
+        authenticated = isLoggedIn();
+      }
 
-    // Show onboarding if: not authenticated OR not onboarded
-    if (!authenticated || !onboarded) {
-      setShowOnboarding(true);
-    }
+      setIsAuthenticated(authenticated);
+      if (!authenticated || !onboarded) {
+        setShowOnboarding(true);
+      }
+      setIsLoading(false);
+    };
 
-    setIsLoading(false);
+    silentRefresh();
   }, []);
 
   const fetchStats = useCallback(async () => {
@@ -134,7 +167,7 @@ function App() {
         accessToken: userData.access_token,
         refreshToken: userData.refresh_token,
         user: userData.user,
-        expiresAt: Date.now() + 15 * 60 * 1000,
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
       }));
     }
     fetchStats();

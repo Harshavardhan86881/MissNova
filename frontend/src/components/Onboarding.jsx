@@ -175,7 +175,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                     accessToken: data.access_token,
                     refreshToken: data.refresh_token,
                     user: data.user,
-                    expiresAt: Date.now() + 15 * 60 * 1000,
+                    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
                 }));
                 // Save selected language preference
                 localStorage.setItem('voice_tutor_language', selectedLanguage);
@@ -224,7 +224,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                     accessToken: data.access_token,
                     refreshToken: data.refresh_token,
                     user: data.user,
-                    expiresAt: Date.now() + 15 * 60 * 1000,
+                    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
                 }));
             }
 
