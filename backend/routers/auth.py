@@ -53,10 +53,26 @@ class UserSignup(BaseModel):
     daily_goal_minutes: int = 10
     learning_language: Optional[str] = "english"
 
+    @validator('email')
+    def strip_email(cls, v):
+        return v.strip()
+
+    @validator('password')
+    def strip_password(cls, v):
+        return v.strip()
+
 
 class UserLogin(BaseModel):
     email: str
     password: str
+
+    @validator('email')
+    def strip_email(cls, v):
+        return v.strip()
+
+    @validator('password')
+    def strip_password(cls, v):
+        return v.strip()
 
 
 class GuestLogin(BaseModel):
@@ -223,100 +239,103 @@ async def signup(user_data: UserSignup, request: Request, response: Response):
 
 @router.post("/login")
 async def login(user_data: UserLogin, request: Request, response: Response):
-    """Login with email and password"""
+    """Login with email and password.
+
+    Strategy: try the database first.  If the user record IS found but the
+    password is wrong we immediately raise 401 (no fallback).  If the record
+    is NOT found in the database (or the DB is unavailable) we fall through to
+    the JSON-file store so users who were registered via the JSON fallback path
+    can still log in.
+    """
     # Try database first
     try:
         db = next(get_db())
 
         user = db.query(User).filter(User.email == user_data.email).first()
 
-        if not user:
-            raise HTTPException(
-                status_code=401, detail={"message": "Invalid email or password"}
-            )
+        if user:
+            # Record found in DB — validate password here; do NOT fall back to JSON.
+            if not user.hashed_password or not user.salt:
+                raise HTTPException(
+                    status_code=401, detail={"message": "Invalid email or password"}
+                )
 
-        if not user.hashed_password or not user.salt:
-            raise HTTPException(
-                status_code=401, detail={"message": "Invalid email or password"}
-            )
+            if not verify_password(user_data.password, user.hashed_password, user.salt):
+                raise HTTPException(
+                    status_code=401, detail={"message": "Invalid email or password"}
+                )
 
-        if not verify_password(user_data.password, user.hashed_password, user.salt):
-            raise HTTPException(
-                status_code=401, detail={"message": "Invalid email or password"}
-            )
+            # Update last login
+            user.last_login_at = datetime.utcnow()
+            db.commit()
 
-        # Update last login
-        user.last_login_at = datetime.utcnow()
-        db.commit()
-
-        # Create tokens
-        access_token = create_token(user.id, user.username)
-
-        return {
-            "access_token": access_token,
-            "refresh_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "username": user.username,
-                "first_name": user.first_name,
-                "level": user.current_level,
-                "xp_total": user.xp_total,
-                "streak_days": user.streak_days,
-            },
-        }
+            access_token = create_token(user.id, user.username)
+            return {
+                "access_token": access_token,
+                "refresh_token": access_token,
+                "token_type": "bearer",
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "level": user.current_level,
+                    "xp_total": user.xp_total,
+                    "streak_days": user.streak_days,
+                },
+            }
+        # user is None → not in DB → fall through to JSON storage
 
     except HTTPException:
-        raise
+        raise  # Wrong password for a confirmed DB user — propagate immediately
     except Exception as e:
-        print(f"Database error, checking JSON storage: {e}")
+        print(f"Database unavailable, checking JSON storage: {e}")
 
-        # Fallback to JSON storage
-        data = get_user_data()
+    # ── JSON storage fallback ──────────────────────────────────────────────
+    # Reached when: (a) user not found in DB, or (b) DB threw an error.
+    data = get_user_data()
 
-        # Find user by email
-        user = None
-        for u in data.get("users", []):
-            if u.get("email") == user_data.email:
-                user = u
-                break
+    json_user = None
+    for u in data.get("users", []):
+        # Strip both sides to guard against accidental whitespace
+        if u.get("email", "").strip() == user_data.email:
+            json_user = u
+            break
 
-        if not user:
-            raise HTTPException(
-                status_code=401, detail={"message": "Invalid email or password"}
-            )
+    if not json_user:
+        raise HTTPException(
+            status_code=401, detail={"message": "Invalid email or password"}
+        )
 
-        # Verify password
-        if not verify_password(
-            user_data.password, user.get("hashed_password", ""), user.get("salt", "")
-        ):
-            raise HTTPException(
-                status_code=401, detail={"message": "Invalid email or password"}
-            )
+    if not verify_password(
+        user_data.password,
+        json_user.get("hashed_password", ""),
+        json_user.get("salt", ""),
+    ):
+        raise HTTPException(
+            status_code=401, detail={"message": "Invalid email or password"}
+        )
 
-        # Update last login
-        user["last_login_at"] = datetime.utcnow().isoformat()
-        data["current_user_id"] = user["id"]
-        save_user_data(data)
+    # Update last login
+    json_user["last_login_at"] = datetime.utcnow().isoformat()
+    data["current_user_id"] = json_user["id"]
+    save_user_data(data)
 
-        # Create tokens
-        access_token = create_token(user["id"], user["username"])
-
-        return {
-            "access_token": access_token,
-            "refresh_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "id": user["id"],
-                "email": user["email"],
-                "username": user["username"],
-                "first_name": user.get("first_name"),
-                "level": user.get("level", 1),
-                "xp_total": user.get("xp_total", 0),
-                "streak_days": user.get("streak_days", 0),
-            },
-        }
+    access_token = create_token(json_user["id"], json_user["username"])
+    return {
+        "access_token": access_token,
+        "refresh_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": json_user["id"],
+            "email": json_user["email"],
+            "username": json_user["username"],
+            "first_name": json_user.get("first_name"),
+            "level": json_user.get("level", 1),
+            "xp_total": json_user.get("xp_total", 0),
+            "streak_days": json_user.get("streak_days", 0),
+        },
+    }
 
 
 @router.post("/guest-login")

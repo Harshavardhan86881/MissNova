@@ -78,7 +78,7 @@ const LevelProgressRing = ({ level, progress, xpInLevel, xpNeeded, size = 120, s
 };
 
 // Daily goal tracker component
-const DailyGoalTracker = ({ sessionsCompleted = 0, sessionsTarget = 3, completedMinutes = 0, targetMinutes = 10 }) => {
+const DailyGoalTracker = ({ sessionsCompleted = 0, sessionsTarget = 3, completedMinutes = 0, targetMinutes = 10, onStartPractice }) => {
     const progress = Math.min(100, (sessionsCompleted / sessionsTarget) * 100);
     const isComplete = sessionsCompleted >= sessionsTarget;
     
@@ -154,7 +154,7 @@ const DailyGoalTracker = ({ sessionsCompleted = 0, sessionsTarget = 3, completed
             
             {!isComplete && (
                 <button
-                    onClick={() => window.location.reload()}
+                    onClick={() => onStartPractice?.()}
                     style={{
                         marginTop: '16px',
                         width: '100%',
@@ -415,6 +415,7 @@ const Dashboard = ({ stats, navigateTo }) => {
                             sessionsTarget={dailyGoal?.sessions_target || 3}
                             completedMinutes={dailyGoal?.completed_minutes || stats?.daily_minutes || 0}
                             targetMinutes={dailyGoal?.target_minutes || 10}
+                            onStartPractice={() => navigateTo('practice')}
                         />
                         
                         {/* Leaderboard Preview */}

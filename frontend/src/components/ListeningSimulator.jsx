@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Send, RotateCcw, Loader2, AlertCircle, Star, UserCircle2, Bot, PlayCircle } from 'lucide-react';
+import { MessageCircle, Send, RotateCcw, Loader2, AlertCircle, Star, UserCircle2, Bot, PlayCircle, Mic, MicOff, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 import { authFetch } from '../utils/authFetch';
 
 const ROLES = [
@@ -8,6 +8,69 @@ const ROLES = [
   { id: 'Difficult Employee', emoji: '😒', desc: 'Resistant to feedback and defensive' },
   { id: 'Frustrated Colleague', emoji: '😠', desc: 'Overwhelmed and blaming others' },
   { id: 'Irate Manager', emoji: '🤬', desc: 'Deadline missed, wants answers now' },
+];
+
+// Pre-scripted high-quality example demonstrating active listening
+const EXAMPLE_CONVERSATION = [
+  {
+    from: 'ai',
+    emoji: '😡',
+    text: "I've been waiting THREE days for my order! Your tracking said it would arrive yesterday — this is completely unacceptable!",
+  },
+  {
+    from: 'user',
+    text: "I completely understand how frustrating that must be, especially when you were counting on it. Let me check your order right now — could you share the order number so I can find out exactly what happened?",
+    tip: '✅ Validates emotion first, then offers a concrete next step — no defensiveness.',
+  },
+  {
+    from: 'ai',
+    emoji: '😡',
+    text: "Order #5892. I need this fixed TODAY — I have a presentation!",
+  },
+  {
+    from: 'user',
+    text: "Absolutely — I hear the urgency. I've located your order and can see it's delayed at the last distribution centre. I'm escalating it to express delivery right now, and you'll receive a confirmation email within 10 minutes.",
+    tip: '✅ Acknowledges urgency with a specific, time-bound action — avoids vague promises.',
+  },
+  {
+    from: 'ai',
+    emoji: '😡',
+    text: "Fine. But I also want a refund for the shipping. This isn't the service I paid for.",
+  },
+  {
+    from: 'user',
+    text: "That's completely fair, and I've already applied a full shipping refund to your account — it'll appear within 2 business days. I'm truly sorry for this experience. Is there anything else I can do for you?",
+    tip: '✅ Takes ownership, gives a specific resolution, closes with genuine empathy.',
+  },
+];
+
+// Actionable persuasion & communication upgrades shown after a session
+const BETTER_WAY_TIPS = [
+  {
+    bad: '"You need to calm down."',
+    good: '"I can hear this matters deeply to you — let\'s work through it together."',
+    label: 'Validate, don\'t dismiss',
+  },
+  {
+    bad: '"Um… I think… you know… maybe…"',
+    good: '"Here is exactly what I can do for you right now."',
+    label: 'Replace filler words with confident action',
+  },
+  {
+    bad: '"That\'s not my fault" / "That\'s our policy."',
+    good: '"Here\'s what I can personally arrange for you: …"',
+    label: 'Shift from blame to solution',
+  },
+  {
+    bad: '"I\'m sorry you feel that way."',
+    good: '"I\'m genuinely sorry this happened — you deserved better."',
+    label: 'Own the apology fully',
+  },
+  {
+    bad: '"You should have read the terms."',
+    good: '"I understand the confusion — let me make this right."',
+    label: 'Use softened, responsible language',
+  },
 ];
 
 const ListeningSimulator = () => {
@@ -23,9 +86,23 @@ const ListeningSimulator = () => {
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Voice-to-text state
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [interimText, setInterimText] = useState('');
+  const [showExample, setShowExample] = useState(false);
+  const recognitionRef = useRef(null);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Detect Web Speech API support and clean up on unmount
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    setVoiceSupported(!!SR);
+    return () => { recognitionRef.current?.abort(); };
+  }, []);
 
   const startSession = async (role) => {
     setLoading(true);
@@ -107,6 +184,9 @@ const ListeningSimulator = () => {
         await authFetch(`/api/listening-simulator/session/${sessionId}`, { method: 'DELETE' });
       } catch (_) {}
     }
+    recognitionRef.current?.abort();
+    setIsRecording(false);
+    setInterimText('');
     setPhase('select');
     setSelectedRole(null);
     setSessionId(null);
@@ -115,6 +195,41 @@ const ListeningSimulator = () => {
     setSessionComplete(false);
     setTurnCount(0);
     setError(null);
+  };
+
+  const toggleRecording = () => {
+    if (!voiceSupported) return;
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+      setInterimText('');
+      return;
+    }
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SR();
+      recognitionRef.current = recognition;
+      recognition.lang = 'en-US';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.onresult = (e) => {
+        let interim = '';
+        let final = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) final += t;
+          else interim += t;
+        }
+        if (final) setUserInput((prev) => (prev + ' ' + final).trim());
+        setInterimText(interim);
+      };
+      recognition.onend = () => { setIsRecording(false); setInterimText(''); };
+      recognition.onerror = () => { setIsRecording(false); setInterimText(''); };
+      recognition.start();
+      setIsRecording(true);
+    } catch (_) {
+      setIsRecording(false);
+    }
   };
 
   // --- Phase: Role Selection ---
@@ -162,6 +277,84 @@ const ListeningSimulator = () => {
               <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{text}</span>
             </div>
           ))}
+        </div>
+
+        {/* "Try Example" collapsible demo */}
+        <div style={{ marginBottom: 20 }}>
+          <button
+            onClick={() => setShowExample((v) => !v)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '10px 18px', borderRadius: 10,
+              border: '1px solid rgba(139,92,246,0.4)',
+              background: 'rgba(139,92,246,0.08)',
+              color: '#a78bfa', fontSize: 13, fontWeight: 700,
+              cursor: 'pointer', transition: 'all 0.2s',
+            }}
+          >
+            <PlayCircle size={15} />
+            See Example Conversation
+            {showExample ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+
+          {showExample && (
+            <div style={{
+              marginTop: 12, borderRadius: 14,
+              border: '1px solid rgba(139,92,246,0.25)',
+              background: 'rgba(139,92,246,0.04)',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                padding: '10px 16px',
+                background: 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(236,72,153,0.08))',
+                fontSize: 12, fontWeight: 700, color: '#a78bfa',
+                letterSpacing: '0.05em', textTransform: 'uppercase',
+              }}>
+                📖 Example: De-escalating an Angry Customer
+              </div>
+              <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {EXAMPLE_CONVERSATION.map((msg, i) => (
+                  <div key={i}>
+                    <div style={{
+                      display: 'flex', gap: 10,
+                      flexDirection: msg.from === 'user' ? 'row-reverse' : 'row',
+                    }}>
+                      <div style={{
+                        width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: msg.from === 'user'
+                          ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+                          : 'linear-gradient(135deg, #ec4899, #8b5cf6)',
+                        fontSize: 14,
+                      }}>
+                        {msg.from === 'user' ? <UserCircle2 size={16} color="white" /> : <span>{msg.emoji}</span>}
+                      </div>
+                      <div style={{
+                        maxWidth: '78%', padding: '8px 12px',
+                        borderRadius: msg.from === 'user' ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
+                        background: msg.from === 'user'
+                          ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+                          : 'var(--input-bg, rgba(255,255,255,0.06))',
+                        border: '1px solid var(--border-color)',
+                        color: msg.from === 'user' ? 'white' : 'var(--text-primary)',
+                        fontSize: 13, lineHeight: 1.55,
+                      }}>
+                        {msg.text}
+                      </div>
+                    </div>
+                    {msg.tip && (
+                      <div style={{
+                        marginTop: 6, marginLeft: 40,
+                        fontSize: 11, color: '#34d399', fontStyle: 'italic',
+                      }}>
+                        {msg.tip}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Role cards */}
@@ -356,55 +549,153 @@ const ListeningSimulator = () => {
 
         {/* Input bar */}
         {!sessionComplete && (
-          <div style={{
-            padding: '12px 16px',
-            borderTop: '1px solid var(--border-color)',
-            display: 'flex', gap: 10,
-          }}>
-            <textarea
-              ref={inputRef}
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder="Type your response to de-escalate… (Enter to send)"
-              rows={2}
-              disabled={loading || sessionComplete}
-              style={{
-                flex: 1, resize: 'none', padding: '10px 12px',
-                background: 'var(--input-bg, rgba(255,255,255,0.05))',
-                border: '1px solid var(--border-color)', borderRadius: 10,
-                color: 'var(--text-primary)', fontSize: 14, lineHeight: 1.5,
-                fontFamily: 'inherit', outline: 'none',
-              }}
-            />
-            <button
-              onClick={sendReply}
-              disabled={!userInput.trim() || loading || sessionComplete}
-              style={{
-                padding: '10px 14px', borderRadius: 10, border: 'none',
-                background: userInput.trim() && !loading
-                  ? 'linear-gradient(135deg, #ec4899, #8b5cf6)'
-                  : 'var(--border-color)',
-                color: 'white', cursor: userInput.trim() && !loading ? 'pointer' : 'not-allowed',
-                alignSelf: 'flex-end',
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
+            {/* Interim speech shown as ghost text above the textarea */}
+            {interimText && (
+              <div style={{
+                fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic',
+                padding: '0 2px', marginBottom: 4,
               }}>
-              <Send size={16} />
-            </button>
+                🎙️ {interimText}…
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <textarea
+                ref={inputRef}
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder={voiceSupported ? 'Type or tap 🎙️ to speak… (Enter to send)' : 'Type your response to de-escalate… (Enter to send)'}
+                rows={2}
+                disabled={loading || sessionComplete}
+                style={{
+                  flex: 1, resize: 'none', padding: '10px 12px',
+                  background: 'var(--input-bg, rgba(255,255,255,0.05))',
+                  border: '1px solid var(--border-color)', borderRadius: 10,
+                  color: 'var(--text-primary)', fontSize: 14, lineHeight: 1.5,
+                  fontFamily: 'inherit', outline: 'none',
+                }}
+              />
+              {/* Mic button — hidden when Web Speech API is unavailable */}
+              {voiceSupported && (
+                <button
+                  onClick={toggleRecording}
+                  disabled={loading || sessionComplete}
+                  title={isRecording ? 'Stop recording' : 'Speak your reply'}
+                  style={{
+                    width: 42, height: 42,
+                    borderRadius: 10, border: 'none',
+                    background: isRecording
+                      ? 'linear-gradient(135deg, #ef4444, #dc2626)'
+                      : 'rgba(139,92,246,0.15)',
+                    color: isRecording ? 'white' : '#a78bfa',
+                    cursor: 'pointer',
+                    alignSelf: 'flex-end',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    animation: isRecording ? 'micPulse 1s ease-in-out infinite' : 'none',
+                    flexShrink: 0,
+                  }}
+                >
+                  {isRecording ? <MicOff size={17} /> : <Mic size={17} />}
+                </button>
+              )}
+              <button
+                onClick={sendReply}
+                disabled={!userInput.trim() || loading || sessionComplete}
+                style={{
+                  padding: '10px 14px', borderRadius: 10, border: 'none',
+                  background: userInput.trim() && !loading
+                    ? 'linear-gradient(135deg, #ec4899, #8b5cf6)'
+                    : 'var(--border-color)',
+                  color: 'white', cursor: userInput.trim() && !loading ? 'pointer' : 'not-allowed',
+                  alignSelf: 'flex-end',
+                }}>
+                <Send size={16} />
+              </button>
+            </div>
+            {/* Manual text fallback notice */}
+            {!voiceSupported && (
+              <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+                ℹ️ Microphone not available in this browser — type your response above.
+              </p>
+            )}
           </div>
         )}
       </div>
 
-      {/* Session done — try again */}
+      {/* Session done — try again + coaching tips */}
       {sessionComplete && (
-        <div style={{ textAlign: 'center' }}>
-          <button onClick={reset} style={{
-            padding: '12px 28px', borderRadius: 12, border: 'none',
-            background: 'linear-gradient(135deg, #ec4899, #8b5cf6)',
-            color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-            display: 'inline-flex', alignItems: 'center', gap: 8,
+        <div>
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
+            <button onClick={reset} style={{
+              padding: '12px 28px', borderRadius: 12, border: 'none',
+              background: 'linear-gradient(135deg, #ec4899, #8b5cf6)',
+              color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+            }}>
+              <RotateCcw size={15} /> Try another scenario
+            </button>
+          </div>
+
+          {/* ── A Better Way to Convince ─────────────────────────────── */}
+          <div style={{
+            borderRadius: 16,
+            border: '1px solid rgba(139,92,246,0.25)',
+            background: 'rgba(139,92,246,0.04)',
+            overflow: 'hidden',
           }}>
-            <RotateCcw size={15} /> Try another scenario
-          </button>
+            <div style={{
+              padding: '14px 20px',
+              background: 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(236,72,153,0.1))',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <Lightbulb size={18} color="#a78bfa" />
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text-primary)' }}>
+                  A Better Way to Convince
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  Advanced phrasing upgrades to make your English more persuasive
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {BETTER_WAY_TIPS.map((tip, i) => (
+                <div key={i} style={{
+                  borderRadius: 12,
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--card-bg)',
+                  padding: '12px 16px',
+                }}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, color: '#a78bfa',
+                    textTransform: 'uppercase', letterSpacing: '0.06em',
+                    marginBottom: 8,
+                  }}>
+                    💡 {tip.label}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{
+                      padding: '6px 10px', borderRadius: 8,
+                      background: 'rgba(239,68,68,0.08)',
+                      border: '1px solid rgba(239,68,68,0.2)',
+                      fontSize: 13, color: '#f87171',
+                    }}>
+                      ✗ {tip.bad}
+                    </div>
+                    <div style={{
+                      padding: '6px 10px', borderRadius: 8,
+                      background: 'rgba(34,197,94,0.08)',
+                      border: '1px solid rgba(34,197,94,0.2)',
+                      fontSize: 13, color: '#4ade80',
+                    }}>
+                      ✓ {tip.good}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -424,6 +715,10 @@ const ListeningSimulator = () => {
         @keyframes bounce {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-5px); }
+        }
+        @keyframes micPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+          50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
         }
       `}</style>
     </div>
