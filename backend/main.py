@@ -152,6 +152,14 @@ def get_default_user_data():
         "streak_freeze_last_earned": None,
         "streak_at_risk": False,
         "max_streak": 0,
+        # New features
+        "filler_history": [],
+        "cefr_level": None,
+        "placement_completed": False,
+        "grammar_lessons_completed": [],
+        "idioms_learned": [],
+        "writing_submissions": [],
+        "saved_conversations": [],
     }
 
 
@@ -189,6 +197,49 @@ class VocabPracticeInput(BaseModel):
     word: str
     sentence: str
     definition: str
+
+
+class PlacementAnswer(BaseModel):
+    question_id: int
+    answer: str
+
+
+class PlacementSubmission(BaseModel):
+    answers: List[PlacementAnswer]
+
+
+class GrammarLessonInput(BaseModel):
+    topic_id: str
+
+
+class GrammarPracticeInput(BaseModel):
+    topic_id: str
+    sentence: str
+    exercise: str = ""
+
+
+class IdiomPracticeInput(BaseModel):
+    idiom_id: int
+    idiom: str
+    meaning: str
+    mode: str
+    answer: str
+
+
+class SRSReviewInput(BaseModel):
+    word: str
+    rating: str
+
+
+class WritingSubmissionInput(BaseModel):
+    format: str
+    prompt: str
+    text: str
+
+
+class ConversationReportInput(BaseModel):
+    conversation_id: str = ""
+    messages: List[dict]
 
 
 # --- Scenarios ---
@@ -1819,6 +1870,41 @@ async def process_text(input_data: TextInput, request: Request):
                     }
                 )
 
+        # Save conversation for Replay feature
+        today_str = str(date.today())
+        saved_convos = ud.setdefault("saved_conversations", [])
+        current_session = None
+        for s in saved_convos:
+            if s.get("date") == today_str and not s.get("completed"):
+                current_session = s
+                break
+        if not current_session:
+            current_session = {
+                "id": f"{uid}_{int(datetime.now().timestamp())}",
+                "date": today_str,
+                "messages": [],
+                "completed": False,
+            }
+            saved_convos.append(current_session)
+        current_session["messages"].append({"role": "user", "text": user_text})
+        current_session["messages"].append(
+            {
+                "role": "assistant",
+                "text": ai_data.get("reply_text", ""),
+                "correction": ai_data.get("correction"),
+                "fluency_score": ai_data.get("fluency_score"),
+                "new_word": ai_data.get("new_word"),
+            }
+        )
+        fluency_scores = [
+            m.get("fluency_score", 0)
+            for m in current_session["messages"]
+            if m.get("fluency_score")
+        ]
+        if fluency_scores:
+            current_session["avg_fluency"] = sum(fluency_scores) / len(fluency_scores)
+        ud["saved_conversations"] = saved_convos[-30:]
+
         update_streak(ud)
         new_badges = check_and_award_badges(ud)
         save_user_progress(uid, ud)
@@ -2999,6 +3085,835 @@ async def listening_simulator_clear(session_id: str):
     """Clear a simulator session."""
     _listening_sessions.pop(session_id, None)
     return {"status": "cleared"}
+
+
+# ─── FILLER WORD TRACKER ─────────────────────────────────────────────────────
+
+FILLER_WORDS_LIST = [
+    "um",
+    "uh",
+    "like",
+    "you know",
+    "basically",
+    "actually",
+    "literally",
+    "sort of",
+    "kind of",
+    "i mean",
+    "right",
+    "honestly",
+    "obviously",
+    "totally",
+    "anyway",
+]
+
+
+@app.post("/api/analyze-fillers")
+async def analyze_fillers(input_data: TextInput, request: Request):
+    text = input_data.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Empty text")
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+
+    text_lower = text.lower()
+    words = text.split()
+    total_words = len(words)
+
+    fillers = {}
+    for filler in FILLER_WORDS_LIST:
+        if " " in filler:
+            count = text_lower.count(filler)
+        else:
+            count = len(re.findall(r"\b" + re.escape(filler) + r"\b", text_lower))
+        if count > 0:
+            fillers[filler] = count
+
+    filler_count = sum(fillers.values())
+    score = max(0, 100 - int((filler_count / max(total_words, 1)) * 200))
+
+    highlighted = text
+    for filler in sorted(fillers.keys(), key=len, reverse=True):
+        pattern = re.compile(r"(?<!\w)" + re.escape(filler) + r"(?!\w)", re.IGNORECASE)
+        highlighted = pattern.sub(
+            lambda m: f'<span style="background:rgba(239,68,68,0.25);border-radius:4px;padding:1px 4px;color:#ef4444;font-weight:700">{m.group()}</span>',
+            highlighted,
+        )
+
+    suggestions = []
+    if filler_count > 0:
+        try:
+            client = get_groq_client()
+            resp = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f'The user spoke {total_words} words with these filler words: {json.dumps(fillers)}. Give 3 specific, actionable tips to reduce fillers. Be encouraging. Respond ONLY with JSON: {{"suggestions": ["tip1", "tip2", "tip3"]}}',
+                    },
+                    {"role": "user", "content": text},
+                ],
+                temperature=0.7,
+                max_tokens=300,
+                response_format={"type": "json_object"},
+            )
+            suggestions = parse_ai_response(resp.choices[0].message.content).get(
+                "suggestions", []
+            )
+        except Exception:
+            suggestions = [
+                "Pause and breathe instead of filling silence with 'um'",
+                "Practice speaking at a slower pace",
+                "Record yourself to identify your most common fillers",
+            ]
+
+    result = {
+        "date": str(datetime.now()),
+        "total_words": total_words,
+        "filler_count": filler_count,
+        "fillers": fillers,
+        "filler_free_score": score,
+        "highlighted_text": highlighted,
+        "suggestions": suggestions,
+    }
+
+    ud.setdefault("filler_history", []).append(
+        {
+            "date": str(date.today()),
+            "total_words": total_words,
+            "filler_count": filler_count,
+            "filler_free_score": score,
+        }
+    )
+    ud["filler_history"] = ud["filler_history"][-50:]
+
+    base_xp = max(10, total_words)
+    xp_info = calculate_xp_with_multiplier(base_xp, ud)
+    ud["xp"] = ud.get("xp", 0) + xp_info["final_xp"]
+    ud["level"], _, _ = calculate_level(ud["xp"])
+    update_streak(ud)
+    new_badges = check_and_award_badges(ud)
+    save_user_progress(uid, ud)
+    result["new_badges"] = new_badges
+    result["xp_earned"] = xp_info
+    return result
+
+
+@app.get("/api/filler-stats")
+async def get_filler_stats(request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    return {"history": ud.get("filler_history", [])}
+
+
+# ─── PLACEMENT TEST ─────────────────────────────────────────────────────────
+
+PLACEMENT_QUESTIONS = [
+    {
+        "id": 1,
+        "type": "Grammar",
+        "difficulty": "A1-A2",
+        "prompt": "Introduce yourself in 2-3 sentences. Include your name, where you're from, and what you do.",
+    },
+    {
+        "id": 2,
+        "type": "Vocabulary",
+        "difficulty": "A2-B1",
+        "prompt": "Describe your daily routine from morning to evening. Use at least 5 different verbs.",
+    },
+    {
+        "id": 3,
+        "type": "Grammar & Style",
+        "difficulty": "B1-B2",
+        "prompt": "Write a short paragraph about a memorable experience you had. Use past tenses and descriptive language.",
+    },
+    {
+        "id": 4,
+        "type": "Argumentation",
+        "difficulty": "B2-C1",
+        "prompt": "Do you think technology has made our lives better or worse? Write a balanced argument with at least two points for each side.",
+    },
+    {
+        "id": 5,
+        "type": "Advanced Expression",
+        "difficulty": "C1-C2",
+        "prompt": "Explain a complex concept from your field of study or work to someone who knows nothing about it. Use analogies and precise vocabulary.",
+    },
+]
+
+
+@app.get("/api/placement-test/start")
+async def placement_test_start(request: Request):
+    return {"questions": PLACEMENT_QUESTIONS}
+
+
+@app.post("/api/placement-test/submit")
+async def placement_test_submit(input_data: PlacementSubmission, request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    answers_text = "\n\n".join(
+        [
+            f"Question {a.question_id} ({PLACEMENT_QUESTIONS[a.question_id - 1]['type']}, {PLACEMENT_QUESTIONS[a.question_id - 1]['difficulty']}):\n{a.answer}"
+            for a in input_data.answers
+            if 1 <= a.question_id <= len(PLACEMENT_QUESTIONS)
+        ]
+    )
+    try:
+        client = get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a CEFR language assessment expert. Evaluate the student's answers to determine their English proficiency level.
+Analyze: grammar accuracy, vocabulary range, sentence complexity, coherence, and task completion.
+Respond ONLY with JSON:
+{
+    "cefr_level": "B1",
+    "overall_score": 62,
+    "strengths": ["Good basic grammar", "Clear communication"],
+    "weaknesses": ["Limited vocabulary range", "Simple sentence structures"],
+    "recommendations": ["Practice using complex sentences", "Read more academic texts"]
+}
+CEFR levels: A1 (Beginner), A2 (Elementary), B1 (Intermediate), B2 (Upper Intermediate), C1 (Advanced), C2 (Proficient)""",
+                },
+                {"role": "user", "content": answers_text},
+            ],
+            temperature=0.3,
+            max_tokens=500,
+            response_format={"type": "json_object"},
+        )
+        result = parse_ai_response(resp.choices[0].message.content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Assessment error: {str(e)}")
+
+    result["date"] = str(date.today())
+    ud["cefr_level"] = result.get("cefr_level", "B1")
+    ud["placement_completed"] = True
+
+    base_xp = 100
+    xp_info = calculate_xp_with_multiplier(base_xp, ud)
+    ud["xp"] = ud.get("xp", 0) + xp_info["final_xp"]
+    ud["level"], _, _ = calculate_level(ud["xp"])
+    update_streak(ud)
+    new_badges = check_and_award_badges(ud)
+    save_user_progress(uid, ud)
+    result["new_badges"] = new_badges
+    result["xp_earned"] = xp_info
+    return result
+
+
+@app.get("/api/placement-test/result")
+async def placement_test_result(request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    return {
+        "cefr_level": ud.get("cefr_level"),
+        "placement_completed": ud.get("placement_completed", False),
+        "date": ud.get("placement_date"),
+    }
+
+
+# ─── GRAMMAR LESSONS ────────────────────────────────────────────────────────
+
+
+@app.post("/api/grammar-lesson/content")
+async def grammar_lesson_content(input_data: GrammarLessonInput, request: Request):
+    try:
+        client = get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""Create a concise grammar micro-lesson for the topic: "{input_data.topic_id}".
+Respond ONLY with JSON:
+{{
+    "explanation": "Clear 3-4 sentence explanation of the rule",
+    "examples": ["Example 1 with the rule applied correctly", "Example 2", "Example 3"],
+    "common_mistakes": ["Wrong → Right (explanation)", "Another common mistake"],
+    "exercises": ["Write a sentence using...", "Correct this sentence: ...", "Fill in the blank: ..."]
+}}""",
+                }
+            ],
+            temperature=0.7,
+            max_tokens=600,
+            response_format={"type": "json_object"},
+        )
+        return parse_ai_response(resp.choices[0].message.content)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Lesson generation error: {str(e)}"
+        )
+
+
+@app.post("/api/grammar-lesson/practice")
+async def grammar_lesson_practice(input_data: GrammarPracticeInput, request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    try:
+        client = get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""Evaluate this grammar exercise response.
+Topic: {input_data.topic_id}
+Exercise: {input_data.exercise}
+Respond ONLY with JSON:
+{{
+    "correct": true,
+    "explanation": "Why the answer is correct/incorrect",
+    "corrected_sentence": "The corrected version if wrong, or the original if correct",
+    "tip": "A helpful grammar tip related to this topic"
+}}""",
+                },
+                {"role": "user", "content": input_data.sentence},
+            ],
+            temperature=0.3,
+            max_tokens=300,
+            response_format={"type": "json_object"},
+        )
+        result = parse_ai_response(resp.choices[0].message.content)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Practice evaluation error: {str(e)}",
+        )
+
+    completed = ud.setdefault("grammar_lessons_completed", [])
+    if input_data.topic_id not in completed:
+        completed.append(input_data.topic_id)
+
+    base_xp = 25
+    xp_info = calculate_xp_with_multiplier(base_xp, ud)
+    ud["xp"] = ud.get("xp", 0) + xp_info["final_xp"]
+    ud["level"], _, _ = calculate_level(ud["xp"])
+    update_streak(ud)
+    new_badges = check_and_award_badges(ud)
+    save_user_progress(uid, ud)
+    result["new_badges"] = new_badges
+    result["xp_earned"] = xp_info
+    return result
+
+
+@app.get("/api/grammar-lessons/progress")
+async def grammar_lessons_progress(request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    return {"completed": ud.get("grammar_lessons_completed", [])}
+
+
+# ─── IDIOM & COLLOCATION ENGINE ─────────────────────────────────────────────
+
+IDIOMS_POOL = [
+    {
+        "id": 1,
+        "idiom": "Break the ice",
+        "meaning": "Start a conversation in a social setting",
+        "example": "He told a joke to break the ice at the meeting.",
+        "category": "Relationships",
+    },
+    {
+        "id": 2,
+        "idiom": "Hit the nail on the head",
+        "meaning": "Describe exactly what is right",
+        "example": "You hit the nail on the head with that analysis.",
+        "category": "Work",
+    },
+    {
+        "id": 3,
+        "idiom": "Bite the bullet",
+        "meaning": "Face a difficult situation bravely",
+        "example": "I bit the bullet and asked for a raise.",
+        "category": "Emotions",
+    },
+    {
+        "id": 4,
+        "idiom": "Cost an arm and a leg",
+        "meaning": "Be very expensive",
+        "example": "That new laptop cost an arm and a leg.",
+        "category": "Daily Life",
+    },
+    {
+        "id": 5,
+        "idiom": "The ball is in your court",
+        "meaning": "It's your turn to make a decision",
+        "example": "I've made my offer — the ball is in your court.",
+        "category": "Negotiation",
+    },
+    {
+        "id": 6,
+        "idiom": "Burning the midnight oil",
+        "meaning": "Working late into the night",
+        "example": "She's been burning the midnight oil to finish her thesis.",
+        "category": "Academic",
+    },
+    {
+        "id": 7,
+        "idiom": "Get the ball rolling",
+        "meaning": "Start something",
+        "example": "Let's get the ball rolling on this project.",
+        "category": "Work",
+    },
+    {
+        "id": 8,
+        "idiom": "See eye to eye",
+        "meaning": "Agree with someone",
+        "example": "We don't always see eye to eye, but we respect each other.",
+        "category": "Relationships",
+    },
+    {
+        "id": 9,
+        "idiom": "A piece of cake",
+        "meaning": "Very easy",
+        "example": "The exam was a piece of cake.",
+        "category": "Academic",
+    },
+    {
+        "id": 10,
+        "idiom": "On the same page",
+        "meaning": "In agreement or having the same understanding",
+        "example": "Let's make sure we're on the same page before the meeting.",
+        "category": "Work",
+    },
+    {
+        "id": 11,
+        "idiom": "Under the weather",
+        "meaning": "Feeling ill or unwell",
+        "example": "I'm a bit under the weather today.",
+        "category": "Daily Life",
+    },
+    {
+        "id": 12,
+        "idiom": "Beat around the bush",
+        "meaning": "Avoid talking about something directly",
+        "example": "Stop beating around the bush and tell me what happened.",
+        "category": "Relationships",
+    },
+    {
+        "id": 13,
+        "idiom": "Think outside the box",
+        "meaning": "Think creatively or unconventionally",
+        "example": "We need to think outside the box for this campaign.",
+        "category": "Work",
+    },
+    {
+        "id": 14,
+        "idiom": "Let the cat out of the bag",
+        "meaning": "Reveal a secret accidentally",
+        "example": "She let the cat out of the bag about the surprise party.",
+        "category": "Daily Life",
+    },
+    {
+        "id": 15,
+        "idiom": "A blessing in disguise",
+        "meaning": "Something bad that turns out good",
+        "example": "Losing that job was a blessing in disguise.",
+        "category": "Emotions",
+    },
+    {
+        "id": 16,
+        "idiom": "Cut to the chase",
+        "meaning": "Get to the point",
+        "example": "Let me cut to the chase — we need more funding.",
+        "category": "Negotiation",
+    },
+    {
+        "id": 17,
+        "idiom": "Go the extra mile",
+        "meaning": "Do more than expected",
+        "example": "She always goes the extra mile for her students.",
+        "category": "Work",
+    },
+    {
+        "id": 18,
+        "idiom": "Hit the books",
+        "meaning": "Study intensively",
+        "example": "I need to hit the books for tomorrow's exam.",
+        "category": "Academic",
+    },
+    {
+        "id": 19,
+        "idiom": "Once in a blue moon",
+        "meaning": "Very rarely",
+        "example": "He only calls once in a blue moon.",
+        "category": "Daily Life",
+    },
+    {
+        "id": 20,
+        "idiom": "Spill the beans",
+        "meaning": "Reveal secret information",
+        "example": "Who spilled the beans about the merger?",
+        "category": "Negotiation",
+    },
+    {
+        "id": 21,
+        "idiom": "Back to the drawing board",
+        "meaning": "Start over with a new plan",
+        "example": "The prototype failed, so it's back to the drawing board.",
+        "category": "Work",
+    },
+    {
+        "id": 22,
+        "idiom": "Heart of gold",
+        "meaning": "Very kind and generous person",
+        "example": "My grandmother has a heart of gold.",
+        "category": "Relationships",
+    },
+    {
+        "id": 23,
+        "idiom": "Pulling someone's leg",
+        "meaning": "Joking with someone",
+        "example": "I was just pulling your leg — don't take it seriously!",
+        "category": "Emotions",
+    },
+    {
+        "id": 24,
+        "idiom": "The best of both worlds",
+        "meaning": "Enjoying the advantages of two different things",
+        "example": "Working from home gives me the best of both worlds.",
+        "category": "Daily Life",
+    },
+]
+
+
+def get_daily_idioms():
+    """Select 6 idioms for today using date-based seeding."""
+    seed = int(date.today().strftime("%Y%m%d"))
+    rng = random.Random(seed)
+    return rng.sample(IDIOMS_POOL, min(6, len(IDIOMS_POOL)))
+
+
+@app.get("/api/idioms/daily")
+async def get_daily_idioms_endpoint(request: Request):
+    return {"idioms": get_daily_idioms()}
+
+
+@app.post("/api/idioms/practice")
+async def idiom_practice(input_data: IdiomPracticeInput, request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    try:
+        client = get_groq_client()
+        mode_prompt = {
+            "guess": f'The idiom is "{input_data.idiom}". The true meaning is: "{input_data.meaning}". The student guessed the meaning. Evaluate if their guess captures the correct meaning.',
+            "fill": f'The idiom is "{input_data.idiom}" (meaning: {input_data.meaning}). The student tried to use it in a sentence. Evaluate if it\'s used correctly.',
+            "use": f'The idiom is "{input_data.idiom}" (meaning: {input_data.meaning}). The student wrote a sentence using this idiom. Evaluate naturalness and correctness.',
+        }.get(
+            input_data.mode,
+            "Evaluate the student's understanding of the idiom.",
+        )
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""{mode_prompt}
+Respond ONLY with JSON:
+{{
+    "correct": true,
+    "feedback": "Detailed feedback on their answer",
+    "example_usage": "A natural example sentence using the idiom",
+    "usage_tip": "When to use this idiom in real conversations"
+}}""",
+                },
+                {"role": "user", "content": input_data.answer},
+            ],
+            temperature=0.5,
+            max_tokens=300,
+            response_format={"type": "json_object"},
+        )
+        result = parse_ai_response(resp.choices[0].message.content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Idiom practice error: {str(e)}")
+
+    learned = ud.setdefault("idioms_learned", [])
+    if result.get("correct") and not any(
+        l.get("idiom") == input_data.idiom for l in learned
+    ):
+        learned.append(
+            {
+                "idiom": input_data.idiom,
+                "meaning": input_data.meaning,
+                "category": "",
+                "learned_at": str(datetime.now()),
+            }
+        )
+
+    base_xp = 20
+    xp_info = calculate_xp_with_multiplier(base_xp, ud)
+    ud["xp"] = ud.get("xp", 0) + xp_info["final_xp"]
+    ud["level"], _, _ = calculate_level(ud["xp"])
+    update_streak(ud)
+    new_badges = check_and_award_badges(ud)
+    save_user_progress(uid, ud)
+    result["new_badges"] = new_badges
+    return result
+
+
+@app.get("/api/idioms/bank")
+async def idioms_bank(request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    return {"idioms_learned": ud.get("idioms_learned", [])}
+
+
+# ─── SRS VOCABULARY REVIEW ──────────────────────────────────────────────────
+
+
+@app.get("/api/srs/review-queue")
+async def srs_review_queue(request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    vocab = ud.get("vocabulary_bank", [])
+    today = str(date.today())
+    due = []
+    mastered = 0
+    for w in vocab:
+        if "srs_interval" not in w:
+            w["srs_interval"] = 1
+            w["srs_ease"] = 2.5
+            w["srs_next_review"] = today
+            w["srs_reviews"] = 0
+        if w.get("srs_next_review", today) <= today:
+            due.append(w)
+        if w.get("srs_interval", 1) >= 21:
+            mastered += 1
+    due.sort(key=lambda w: w.get("srs_next_review", today))
+    return {
+        "words": due[:20],
+        "stats": {"total": len(vocab), "due": len(due), "mastered": mastered},
+    }
+
+
+@app.post("/api/srs/review")
+async def srs_review(input_data: SRSReviewInput, request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    vocab = ud.get("vocabulary_bank", [])
+    word_entry = None
+    for w in vocab:
+        if w["word"].lower() == input_data.word.lower():
+            word_entry = w
+            break
+    if not word_entry:
+        raise HTTPException(status_code=404, detail="Word not found in vocabulary bank")
+
+    from datetime import timedelta
+
+    interval = word_entry.get("srs_interval", 1)
+    ease = word_entry.get("srs_ease", 2.5)
+    reviews = word_entry.get("srs_reviews", 0)
+
+    if input_data.rating == "again":
+        interval = 1
+        ease = max(1.3, ease - 0.2)
+    elif input_data.rating == "hard":
+        interval = max(1, int(interval * 1.2))
+        ease = max(1.3, ease - 0.15)
+    elif input_data.rating == "good":
+        interval = max(1, int(interval * ease))
+    elif input_data.rating == "easy":
+        interval = max(1, int(interval * ease * 1.3))
+        ease = ease + 0.15
+
+    next_review = date.today() + timedelta(days=interval)
+    word_entry["srs_interval"] = interval
+    word_entry["srs_ease"] = round(ease, 2)
+    word_entry["srs_next_review"] = str(next_review)
+    word_entry["srs_reviews"] = reviews + 1
+    if interval >= 21:
+        word_entry["mastery"] = min(5, word_entry.get("mastery", 0) + 1)
+
+    base_xp = 5
+    xp_info = calculate_xp_with_multiplier(base_xp, ud)
+    ud["xp"] = ud.get("xp", 0) + xp_info["final_xp"]
+    ud["level"], _, _ = calculate_level(ud["xp"])
+    new_badges = check_and_award_badges(ud)
+    save_user_progress(uid, ud)
+    return {
+        "next_review": str(next_review),
+        "new_interval": interval,
+        "message": f"Next review in {interval} day{'s' if interval != 1 else ''}",
+        "new_badges": new_badges,
+    }
+
+
+# ─── WRITING WORKSHOP ───────────────────────────────────────────────────────
+
+WRITING_PROMPT_TEMPLATES = {
+    "formal_email": [
+        "Write a formal email to your professor requesting an extension on your assignment deadline.",
+        "Write a professional email declining a job offer while maintaining a positive relationship.",
+        "Write a formal email to a company's customer service about a billing error.",
+        "Write an email to your team announcing a change in project timeline.",
+    ],
+    "linkedin_message": [
+        "Write a LinkedIn message to someone you admire in your industry, introducing yourself.",
+        "Write a connection request to a recruiter at a company you'd like to work at.",
+        "Write a LinkedIn post celebrating a professional achievement.",
+    ],
+    "essay_paragraph": [
+        "Write a paragraph arguing why remote work is beneficial for productivity.",
+        "Write a descriptive paragraph about your hometown and what makes it special.",
+        "Write an analytical paragraph about the impact of social media on communication skills.",
+    ],
+    "complaint_letter": [
+        "Write a complaint letter about a product that arrived damaged.",
+        "Write a professional complaint about poor service at a restaurant.",
+        "Write a complaint to your landlord about a maintenance issue.",
+    ],
+    "cover_letter": [
+        "Write the opening paragraph of a cover letter for a marketing position.",
+        "Write a cover letter paragraph explaining a career gap positively.",
+        "Write the closing paragraph of a cover letter that ends with a strong call to action.",
+    ],
+    "text_message": [
+        "Text a friend to cancel plans without making them feel bad.",
+        "Text your coworker to ask if they can cover your shift.",
+        "Text a friend recommending a movie you just watched.",
+    ],
+}
+
+
+@app.get("/api/writing/prompt")
+async def writing_prompt(format: str = "formal_email", request: Request = None):
+    prompts = WRITING_PROMPT_TEMPLATES.get(
+        format, WRITING_PROMPT_TEMPLATES["formal_email"]
+    )
+    seed = int(datetime.now().strftime("%Y%m%d%H"))
+    rng = random.Random(seed + hash(format))
+    prompt = rng.choice(prompts)
+    tips = {
+        "formal_email": "Use a professional greeting, clear subject, and polite closing",
+        "linkedin_message": "Be concise, mention shared interests, and add value",
+        "essay_paragraph": "Start with a topic sentence, provide evidence, and conclude",
+        "complaint_letter": "Be factual, state the issue clearly, and specify what you want",
+        "cover_letter": "Match your skills to their needs and show enthusiasm",
+        "text_message": "Keep it casual and natural — contractions and slang are fine",
+    }
+    return {"prompt": prompt, "tips": tips.get(format, ""), "format": format}
+
+
+@app.post("/api/writing/submit")
+async def writing_submit(input_data: WritingSubmissionInput, request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    try:
+        client = get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""You are an expert English writing coach. Evaluate this {input_data.format.replace('_', ' ')} writing.
+Prompt given: "{input_data.prompt}"
+Evaluate grammar, style, vocabulary, and register appropriateness (0-100 each).
+Respond ONLY with JSON:
+{{
+    "overall_score": 72,
+    "grammar_score": 75,
+    "style_score": 70,
+    "register_score": 80,
+    "vocabulary_score": 65,
+    "register_feedback": "Overall register analysis",
+    "corrections": [
+        {{"original": "wrong phrase", "corrected": "right phrase", "explanation": "why"}}
+    ],
+    "vocabulary_upgrades": [
+        {{"original": "simple word", "upgrade": "better word"}}
+    ],
+    "improved_version": "The full improved text"
+}}""",
+                },
+                {"role": "user", "content": input_data.text},
+            ],
+            temperature=0.4,
+            max_tokens=800,
+            response_format={"type": "json_object"},
+        )
+        result = parse_ai_response(resp.choices[0].message.content)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Writing evaluation error: {str(e)}",
+        )
+
+    word_count = len(input_data.text.split())
+    base_xp = max(20, word_count * 2)
+    xp_info = calculate_xp_with_multiplier(base_xp, ud)
+    ud["xp"] = ud.get("xp", 0) + xp_info["final_xp"]
+    ud["level"], _, _ = calculate_level(ud["xp"])
+    ud.setdefault("writing_submissions", []).append(
+        {
+            "date": str(date.today()),
+            "format": input_data.format,
+            "score": result.get("overall_score", 0),
+            "word_count": word_count,
+        }
+    )
+    ud["writing_submissions"] = ud["writing_submissions"][-30:]
+    update_streak(ud)
+    new_badges = check_and_award_badges(ud)
+    save_user_progress(uid, ud)
+    result["new_badges"] = new_badges
+    result["xp_earned"] = xp_info
+    return result
+
+
+# ─── CONVERSATION REPLAY ────────────────────────────────────────────────────
+
+
+@app.get("/api/conversations/list")
+async def conversations_list(request: Request):
+    uid = get_user_id_from_request(request)
+    ud = load_user_progress(uid)
+    convos = ud.get("saved_conversations", [])
+    return {"conversations": list(reversed(convos[-30:]))}
+
+
+@app.post("/api/conversations/report")
+async def conversation_report(input_data: ConversationReportInput, request: Request):
+    messages = input_data.messages
+    if not messages:
+        raise HTTPException(status_code=400, detail="No messages to analyze")
+    transcript = "\n".join(
+        [
+            f"{'User' if m.get('role') == 'user' else 'AI'}: {m.get('text', '')}"
+            for m in messages
+        ]
+    )
+    try:
+        client = get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Analyze this English conversation and generate a detailed report card.
+Respond ONLY with JSON:
+{
+    "scores": {"grammar": 7, "vocabulary": 6, "fluency": 8, "coherence": 7, "confidence": 6},
+    "strengths": ["Strength 1", "Strength 2"],
+    "improvements": ["Area to improve 1", "Area to improve 2"],
+    "grammar_patterns": ["Recurring pattern 1", "Pattern 2"]
+}
+Scores should be 1-10. Be specific and actionable.""",
+                },
+                {"role": "user", "content": transcript},
+            ],
+            temperature=0.4,
+            max_tokens=500,
+            response_format={"type": "json_object"},
+        )
+        return parse_ai_response(resp.choices[0].message.content)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Report generation error: {str(e)}",
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

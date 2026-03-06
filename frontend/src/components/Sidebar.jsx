@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
     MessageSquare, Mic, BookOpen, BarChart3, Target, Trophy,
-    Zap, Languages, Sparkles, Shield, AlertTriangle, Flame, LogOut, Settings, User, ChevronDown, Globe, Menu, X, FileText, Sliders, Headphones
+    Zap, Languages, Sparkles, Shield, AlertTriangle, Flame, LogOut, Settings, User, ChevronDown, Globe, Menu, X, FileText, Sliders, Headphones,
+    Activity, GraduationCap, PenTool, Lightbulb, RotateCcw, Edit3, History
 } from 'lucide-react';
 import { trackEvent, EVENTS } from '../utils/analytics';
 import { authFetch } from '../utils/authFetch';
@@ -81,6 +82,13 @@ const Sidebar = ({ currentPage, navigateTo, stats }) => {
         { id: 'bluf-generator', label: 'BLUF Generator', icon: FileText },
         { id: 'tone-calibrator', label: 'Tone Calibrator', icon: Sliders },
         { id: 'listening-simulator', label: 'Listening Sim', icon: Headphones },
+        { id: 'filler-tracker', label: 'Filler Tracker', icon: Activity },
+        { id: 'placement-test', label: 'Placement Test', icon: GraduationCap },
+        { id: 'grammar-lessons', label: 'Grammar Lessons', icon: PenTool },
+        { id: 'idiom-engine', label: 'Idioms', icon: Lightbulb },
+        { id: 'srs-review', label: 'SRS Review', icon: RotateCcw },
+        { id: 'writing-workshop', label: 'Writing Workshop', icon: Edit3 },
+        { id: 'conversation-replay', label: 'Replay', icon: History },
     ];
 
     const streakAtRisk = stats?.streak_at_risk && stats?.streak_days > 0;

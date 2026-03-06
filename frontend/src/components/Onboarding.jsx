@@ -62,6 +62,13 @@ const Onboarding = ({ onComplete, navigateTo }) => {
     const [showPassword, setShowPassword] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState(null);
     const [pwnedWarning, setPwnedWarning] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
+    const [resetPasswordEmail, setResetPasswordEmail] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmNewPassword, setConfirmNewPassword] = useState('');
+    const [resetSuccess, setResetSuccess] = useState(false);
 
     // Onboarding preferences
     const [selectedGoals, setSelectedGoals] = useState([]);
@@ -137,6 +144,12 @@ const Onboarding = ({ onComplete, navigateTo }) => {
         // Validate password strength
         if (!passwordStrength || passwordStrength.score < 2) {
             setError('Please choose a stronger password (at least "Fair" strength)');
+            return;
+        }
+
+        // Validate confirm password
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
             return;
         }
 
@@ -243,6 +256,38 @@ const Onboarding = ({ onComplete, navigateTo }) => {
         }
     };
 
+    // Handle forgot / reset password
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setError('');
+        if (newPassword !== confirmNewPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+        if (newPassword.length < 8) {
+            setError('Password must be at least 8 characters');
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const response = await fetch('/api/auth/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: resetPasswordEmail, new_password: newPassword }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                setError(data.detail?.message || 'Reset failed. Please try again.');
+                return;
+            }
+            setResetSuccess(true);
+        } catch (err) {
+            setError('Unable to connect. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleComplete = (goToPage = 'dashboard') => {
         // Save preferences
         const prefs = {
@@ -271,7 +316,132 @@ const Onboarding = ({ onComplete, navigateTo }) => {
     };
 
     // Render auth form (login/signup)
-    const renderAuthForm = () => (
+    const renderAuthForm = () => {
+        // Forgot password / reset password sub-form
+        if (forgotPasswordMode) {
+            return (
+                <div style={{ width: '100%', maxWidth: '400px', margin: '0 auto', animation: 'fadeSlideIn 0.5s ease' }}>
+                    <div style={{
+                        background: 'rgba(255, 255, 255, 0.03)', backdropFilter: 'blur(40px)',
+                        WebkitBackdropFilter: 'blur(40px)', borderRadius: '24px',
+                        border: '1px solid rgba(255, 255, 255, 0.08)', padding: '32px',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                    }}>
+                        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                            <div style={{
+                                width: '52px', height: '52px', borderRadius: '16px',
+                                background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                margin: '0 auto 16px',
+                            }}>
+                                <Shield size={26} style={{ color: 'white' }} />
+                            </div>
+                            <h2 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '6px' }}>Reset Password</h2>
+                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                Enter your email and a new password to regain access.
+                            </p>
+                        </div>
+
+                        {resetSuccess ? (
+                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                                <CheckCircle2 size={48} style={{ color: '#22c55e', margin: '0 auto 16px', display: 'block' }} />
+                                <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px', color: '#22c55e' }}>
+                                    Password Reset!
+                                </h3>
+                                <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
+                                    Your password has been updated. You can now sign in with your new password.
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        setForgotPasswordMode(false);
+                                        setResetSuccess(false);
+                                        setResetPasswordEmail('');
+                                        setNewPassword('');
+                                        setConfirmNewPassword('');
+                                        setError('');
+                                        setMode('login');
+                                    }}
+                                    style={{
+                                        padding: '14px 32px', borderRadius: '12px', border: 'none',
+                                        background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                        color: '#fff', fontSize: '15px', fontWeight: '600', cursor: 'pointer',
+                                    }}
+                                >
+                                    Sign In Now
+                                </button>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleResetPassword}>
+                                {error && (
+                                    <div style={{
+                                        padding: '14px', background: 'rgba(239, 68, 68, 0.1)',
+                                        border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px',
+                                        marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px',
+                                    }}>
+                                        <AlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0 }} />
+                                        <span style={{ fontSize: '13px', color: '#ef4444' }}>{error}</span>
+                                    </div>
+                                )}
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                        Email Address
+                                    </label>
+                                    <input
+                                        type="email" value={resetPasswordEmail}
+                                        onChange={(e) => setResetPasswordEmail(e.target.value)}
+                                        placeholder="you@example.com" required
+                                        style={{ width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '15px', color: '#fff', outline: 'none', transition: 'all 0.2s ease' }}
+                                        onFocus={(e) => { e.target.style.borderColor = 'rgba(139,92,246,0.5)'; e.target.style.background = 'rgba(139,92,246,0.1)'; }}
+                                        onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                    />
+                                </div>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                        New Password
+                                    </label>
+                                    <input
+                                        type="password" value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        placeholder="At least 8 characters" required minLength={8}
+                                        style={{ width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '15px', color: '#fff', outline: 'none', transition: 'all 0.2s ease' }}
+                                        onFocus={(e) => { e.target.style.borderColor = 'rgba(139,92,246,0.5)'; e.target.style.background = 'rgba(139,92,246,0.1)'; }}
+                                        onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                    />
+                                </div>
+                                <div style={{ marginBottom: '24px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                        Confirm New Password
+                                    </label>
+                                    <input
+                                        type="password" value={confirmNewPassword}
+                                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                                        placeholder="Repeat new password" required minLength={8}
+                                        style={{ width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '15px', color: '#fff', outline: 'none', transition: 'all 0.2s ease' }}
+                                        onFocus={(e) => { e.target.style.borderColor = 'rgba(139,92,246,0.5)'; e.target.style.background = 'rgba(139,92,246,0.1)'; }}
+                                        onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                    />
+                                </div>
+                                <button type="submit" disabled={isLoading} style={{
+                                    width: '100%', padding: '16px', border: 'none', borderRadius: '12px',
+                                    background: isLoading ? 'rgba(139,92,246,0.5)' : 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                                    color: '#fff', fontSize: '15px', fontWeight: '600',
+                                    cursor: isLoading ? 'not-allowed' : 'pointer', transition: 'all 0.2s ease',
+                                    boxShadow: '0 8px 30px rgba(139,92,246,0.3)',
+                                }}>
+                                    {isLoading ? 'Resetting...' : 'Reset Password'}
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                    <button onClick={() => { setForgotPasswordMode(false); setError(''); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '20px auto 0', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                        <ArrowLeft size={14} /> Back to Sign In
+                    </button>
+                </div>
+            );
+        }
+
+        return (
         <div style={{
             width: '100%',
             maxWidth: '400px',
@@ -513,6 +683,97 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                         )}
                     </div>
 
+                    {/* Confirm Password (signup only) */}
+                    {mode === 'signup' && (
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{
+                                display: 'block',
+                                fontSize: '13px',
+                                fontWeight: '500',
+                                color: 'var(--text-secondary)',
+                                marginBottom: '8px',
+                            }}>
+                                Confirm Password
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    type={showConfirmPassword ? 'text' : 'password'}
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    placeholder="Repeat your password"
+                                    required
+                                    minLength={8}
+                                    style={{
+                                        width: '100%',
+                                        padding: '14px 16px',
+                                        paddingRight: '48px',
+                                        background: confirmPassword && password !== confirmPassword
+                                            ? 'rgba(239,68,68,0.08)'
+                                            : 'rgba(255,255,255,0.05)',
+                                        border: confirmPassword && password !== confirmPassword
+                                            ? '1px solid rgba(239,68,68,0.4)'
+                                            : '1px solid rgba(255,255,255,0.1)',
+                                        borderRadius: '12px',
+                                        fontSize: '15px',
+                                        color: '#fff',
+                                        outline: 'none',
+                                        transition: 'all 0.2s ease',
+                                    }}
+                                    onFocus={(e) => {
+                                        if (!(confirmPassword && password !== confirmPassword)) {
+                                            e.target.style.borderColor = 'rgba(139,92,246,0.5)';
+                                            e.target.style.background = 'rgba(139,92,246,0.1)';
+                                        }
+                                    }}
+                                    onBlur={(e) => {
+                                        if (!(confirmPassword && password !== confirmPassword)) {
+                                            e.target.style.borderColor = 'rgba(255,255,255,0.1)';
+                                            e.target.style.background = 'rgba(255,255,255,0.05)';
+                                        }
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                    style={{
+                                        position: 'absolute', right: '14px', top: '50%',
+                                        transform: 'translateY(-50%)', background: 'none',
+                                        border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px',
+                                    }}
+                                >
+                                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                            {confirmPassword && password !== confirmPassword && (
+                                <p style={{ fontSize: '11px', color: '#ef4444', marginTop: '6px' }}>
+                                    ✗ Passwords do not match
+                                </p>
+                            )}
+                            {confirmPassword && password === confirmPassword && (
+                                <p style={{ fontSize: '11px', color: '#22c55e', marginTop: '6px' }}>
+                                    ✓ Passwords match
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Forgot password link (login only) */}
+                    {mode === 'login' && (
+                        <div style={{ textAlign: 'right', marginBottom: '20px', marginTop: '-8px' }}>
+                            <button
+                                type="button"
+                                onClick={() => { setForgotPasswordMode(true); setError(''); }}
+                                style={{
+                                    background: 'none', border: 'none', color: '#a78bfa',
+                                    fontSize: '13px', cursor: 'pointer', padding: '0',
+                                    textDecoration: 'underline', textUnderlineOffset: '2px',
+                                }}
+                            >
+                                Forgot password?
+                            </button>
+                        </div>
+                    )}
+
                     {/* Submit button */}
                     <button
                         type="submit"
@@ -586,7 +847,8 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                 <ArrowLeft size={14} /> Back to welcome
             </button>
         </div>
-    );
+        );
+    };
 
     // Render welcome step
     const renderWelcome = () => (

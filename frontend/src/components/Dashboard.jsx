@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
     Mic, Target, MessageSquare, BookOpen, Zap, Trophy,
-    TrendingUp, ArrowRight, Languages, Flame, AlertTriangle, Shield, Sparkles, ChevronRight, Clock, Globe
+    TrendingUp, ArrowRight, Languages, Flame, AlertTriangle, Shield, Sparkles, ChevronRight, Clock, Globe,
+    CheckCircle, Play, GraduationCap, Headphones, Star
 } from 'lucide-react';
 import ShareButton from './ShareButton';
 import GoalsWidget from './GoalsWidget';
@@ -610,6 +611,101 @@ const Dashboard = ({ stats, navigateTo }) => {
                     </div>
                 </div>
             )}
+
+            {/* ── Learning Path (Curriculum Guidance) ── */}
+            <div className="glass-card" style={{ padding: '20px', marginBottom: '28px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '16px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                        <GraduationCap size={18} style={{ color: '#a78bfa' }} /> Your Learning Path
+                    </h2>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'rgba(139,92,246,0.08)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(139,92,246,0.12)' }}>
+                        Recommended order
+                    </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {[
+                        {
+                            step: 1, id: 'placement-test', icon: GraduationCap, label: 'Placement Test',
+                            desc: 'Find your level and personalise your journey', color: '#8b5cf6',
+                            done: stats?.cefr_level != null,
+                        },
+                        {
+                            step: 2, id: 'daily-vocab', icon: BookOpen, label: 'Daily Vocabulary',
+                            desc: '5 new words a day builds a lasting word bank', color: '#06b6d4',
+                            done: (stats?.vocabulary_count || 0) >= 5,
+                        },
+                        {
+                            step: 3, id: 'practice', icon: Mic, label: 'Free Practice',
+                            desc: 'Speak with Miss Nova on any topic', color: '#ec4899',
+                            done: (stats?.sessions_completed || 0) >= 1,
+                        },
+                        {
+                            step: 4, id: 'scenarios', icon: MessageSquare, label: 'Real-Life Scenarios',
+                            desc: 'Job interviews, negotiations, and more', color: '#f59e0b',
+                            done: (stats?.scenarios_completed || 0) >= 1,
+                        },
+                        {
+                            step: 5, id: 'listening-simulator', icon: Headphones, label: 'Listening Simulator',
+                            desc: 'De-escalate tough conversations with empathy', color: '#10b981',
+                            done: false,
+                        },
+                        {
+                            step: 6, id: 'srs-review', icon: Star, label: 'SRS Review',
+                            desc: 'Reinforce everything you have learned with spaced repetition', color: '#f97316',
+                            done: false,
+                        },
+                    ].map(({ step, id, icon: Icon, label, desc, color, done }, idx) => (
+                        <div key={id} style={{
+                            display: 'flex', alignItems: 'center', gap: '14px',
+                            padding: '12px 14px', borderRadius: '12px',
+                            background: done ? 'rgba(34,197,94,0.04)' : 'rgba(255,255,255,0.02)',
+                            border: done ? '1px solid rgba(34,197,94,0.12)' : '1px solid var(--border-subtle)',
+                            transition: 'all 0.2s ease',
+                        }}>
+                            {/* Step number / done tick */}
+                            <div style={{
+                                width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: done ? 'rgba(34,197,94,0.15)' : `${color}18`,
+                                border: done ? '1px solid rgba(34,197,94,0.3)' : `1px solid ${color}30`,
+                            }}>
+                                {done
+                                    ? <CheckCircle size={16} style={{ color: '#22c55e' }} />
+                                    : <Icon size={15} style={{ color }} />}
+                            </div>
+
+                            {/* Label + desc */}
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '13px', fontWeight: '700', color: done ? 'var(--text-muted)' : 'var(--text-primary)', marginBottom: '1px' }}>
+                                    {step}. {label}
+                                    {done && <span style={{ marginLeft: 6, fontSize: '10px', color: '#22c55e', fontWeight: '600' }}>DONE</span>}
+                                </div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{desc}</div>
+                            </div>
+
+                            {/* CTA */}
+                            {!done && (
+                                <button
+                                    onClick={() => navigateTo(id)}
+                                    style={{
+                                        padding: '7px 14px', borderRadius: '8px', border: 'none',
+                                        background: `${color}18`, color, fontSize: '12px',
+                                        fontWeight: '600', cursor: 'pointer', flexShrink: 0,
+                                        display: 'flex', alignItems: 'center', gap: '5px',
+                                        minHeight: '36px',
+                                        transition: 'background 0.2s ease',
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = `${color}30`}
+                                    onMouseLeave={e => e.currentTarget.style.background = `${color}18`}
+                                >
+                                    <Play size={11} /> Start
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
 
             {/* Quick Actions */}
             <h2 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>

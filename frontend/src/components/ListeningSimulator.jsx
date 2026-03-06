@@ -91,7 +91,10 @@ const ListeningSimulator = () => {
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [interimText, setInterimText] = useState('');
   const [showExample, setShowExample] = useState(false);
+  const [silenceProgress, setSilenceProgress] = useState(0);
   const recognitionRef = useRef(null);
+  const silenceTimerRef = useRef(null);
+  const silenceProgressRef = useRef(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -197,9 +200,30 @@ const ListeningSimulator = () => {
     setError(null);
   };
 
+  const SILENCE_MS = 3500;
+
+  const clearSilenceTimer = () => {
+    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+    if (silenceProgressRef.current) { clearInterval(silenceProgressRef.current); silenceProgressRef.current = null; }
+    setSilenceProgress(0);
+  };
+
+  const resetSilenceTimer = () => {
+    clearSilenceTimer();
+    const startedAt = Date.now();
+    silenceProgressRef.current = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      setSilenceProgress(Math.min(100, (elapsed / SILENCE_MS) * 100));
+    }, 50);
+    silenceTimerRef.current = setTimeout(() => {
+      recognitionRef.current?.stop();
+    }, SILENCE_MS);
+  };
+
   const toggleRecording = () => {
     if (!voiceSupported) return;
     if (isRecording) {
+      clearSilenceTimer();
       recognitionRef.current?.stop();
       setIsRecording(false);
       setInterimText('');
@@ -210,8 +234,9 @@ const ListeningSimulator = () => {
       const recognition = new SR();
       recognitionRef.current = recognition;
       recognition.lang = 'en-US';
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
+      recognition.onstart = () => { resetSilenceTimer(); };
       recognition.onresult = (e) => {
         let interim = '';
         let final = '';
@@ -220,11 +245,12 @@ const ListeningSimulator = () => {
           if (e.results[i].isFinal) final += t;
           else interim += t;
         }
+        if (final || interim) resetSilenceTimer();
         if (final) setUserInput((prev) => (prev + ' ' + final).trim());
         setInterimText(interim);
       };
-      recognition.onend = () => { setIsRecording(false); setInterimText(''); };
-      recognition.onerror = () => { setIsRecording(false); setInterimText(''); };
+      recognition.onend = () => { clearSilenceTimer(); setIsRecording(false); setInterimText(''); };
+      recognition.onerror = () => { clearSilenceTimer(); setIsRecording(false); setInterimText(''); };
       recognition.start();
       setIsRecording(true);
     } catch (_) {
@@ -557,6 +583,27 @@ const ListeningSimulator = () => {
                 padding: '0 2px', marginBottom: 4,
               }}>
                 🎙️ {interimText}…
+              </div>
+            )}
+            {/* Silence detection progress */}
+            {isRecording && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{
+                  height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.08)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: 2,
+                    width: `${silenceProgress}%`,
+                    background: silenceProgress > 80
+                      ? 'linear-gradient(90deg, #ef4444, #dc2626)'
+                      : 'linear-gradient(90deg, #8b5cf6, #ec4899)',
+                    transition: 'width 0.05s linear, background 0.3s ease',
+                  }} />
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {silenceProgress >= 100 ? '⏳ Processing...' : silenceProgress > 30 ? '🔇 Silence detected — wrapping up...' : '🎙️ Listening — speak naturally, pauses are OK'}
+                </div>
               </div>
             )}
             <div style={{ display: 'flex', gap: 10 }}>

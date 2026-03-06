@@ -53,11 +53,11 @@ class UserSignup(BaseModel):
     daily_goal_minutes: int = 10
     learning_language: Optional[str] = "english"
 
-    @validator('email')
+    @validator("email")
     def strip_email(cls, v):
         return v.strip()
 
-    @validator('password')
+    @validator("password")
     def strip_password(cls, v):
         return v.strip()
 
@@ -66,11 +66,11 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
-    @validator('email')
+    @validator("email")
     def strip_email(cls, v):
         return v.strip()
 
-    @validator('password')
+    @validator("password")
     def strip_password(cls, v):
         return v.strip()
 
@@ -158,19 +158,21 @@ async def signup(user_data: UserSignup, request: Request, response: Response):
                 _data["users"] = []
             # Only add if not already present (email uniqueness)
             if not any(u.get("email") == new_user.email for u in _data["users"]):
-                _data["users"].append({
-                    "id": new_user.id,
-                    "email": new_user.email,
-                    "username": new_user.username,
-                    "hashed_password": hashed_pw,
-                    "salt": salt,
-                    "first_name": new_user.first_name,
-                    "last_name": new_user.last_name,
-                    "created_at": datetime.utcnow().isoformat(),
-                    "level": 1,
-                    "xp_total": 0,
-                    "streak_days": 0,
-                })
+                _data["users"].append(
+                    {
+                        "id": new_user.id,
+                        "email": new_user.email,
+                        "username": new_user.username,
+                        "hashed_password": hashed_pw,
+                        "salt": salt,
+                        "first_name": new_user.first_name,
+                        "last_name": new_user.last_name,
+                        "created_at": datetime.utcnow().isoformat(),
+                        "level": 1,
+                        "xp_total": 0,
+                        "streak_days": 0,
+                    }
+                )
                 save_user_data(_data)
         except Exception as _backup_err:
             print(f"JSON backup after DB signup failed (non-fatal): {_backup_err}")
@@ -520,3 +522,95 @@ async def refresh_token(request: Request):
     # Fallback: accept any token that looks valid (guest / JSON-stored users)
     new_token = create_token(user_id_str, username)
     return {"access_token": new_token, "token_type": "bearer"}
+
+
+# --- Forgot / Reset Password ---
+
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    new_password: str
+
+    @validator("email")
+    def strip_email(cls, v):
+        return v.strip()
+
+    @validator("new_password")
+    def strip_password(cls, v):
+        return v.strip()
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: ResetPasswordRequest):
+    """Reset password directly (demo mode — no email delivery required)."""
+    if len(data.new_password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Password must be at least 8 characters"},
+        )
+
+    # Try DB first
+    try:
+        db = next(get_db())
+        user = db.query(User).filter(User.email == data.email).first()
+        if user:
+            hashed_pw, salt = simple_hash(data.new_password)
+            user.hashed_password = hashed_pw
+            user.salt = salt
+            db.commit()
+            _sync_password_to_json(data.email, hashed_pw, salt)
+            return {"success": True, "message": "Password updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"DB error during password reset: {e}")
+
+    # JSON fallback
+    return _reset_password_json(data.email, data.new_password)
+
+
+@router.post("/reset-password")
+async def reset_password(data: ResetPasswordRequest):
+    """Alias for forgot-password endpoint (same logic)."""
+    return await forgot_password(data)
+
+
+def _sync_password_to_json(email: str, hashed_pw: str, salt: str):
+    """Keep JSON store in sync after a DB password reset."""
+    try:
+        store = get_user_data()
+        for u in store.get("users", []):
+            if u.get("email", "").strip() == email:
+                u["hashed_password"] = hashed_pw
+                u["salt"] = salt
+                save_user_data(store)
+                break
+    except Exception as ex:
+        print(f"JSON sync after password reset failed (non-fatal): {ex}")
+
+
+def _reset_password_json(email: str, new_password: str) -> dict:
+    """Reset password in JSON store. Returns generic success to avoid user enumeration."""
+    store = get_user_data()
+    json_user = None
+    for u in store.get("users", []):
+        if u.get("email", "").strip() == email:
+            json_user = u
+            break
+
+    if json_user:
+        if len(new_password) < 8:
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "Password must be at least 8 characters"},
+            )
+        hashed_pw, salt = simple_hash(new_password)
+        json_user["hashed_password"] = hashed_pw
+        json_user["salt"] = salt
+        save_user_data(store)
+
+    # Always return success to avoid user enumeration
+    return {
+        "success": True,
+        "message": "If that account exists, the password has been updated",
+    }

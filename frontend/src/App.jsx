@@ -13,6 +13,13 @@ import TranslateInput from './components/TranslateInput';
 import BLUFGenerator from './components/BLUFGenerator';
 import ToneCalibrator from './components/ToneCalibrator';
 import ListeningSimulator from './components/ListeningSimulator';
+import FillerTracker from './components/FillerTracker';
+import PlacementTest from './components/PlacementTest';
+import GrammarLessons from './components/GrammarLessons';
+import IdiomEngine from './components/IdiomEngine';
+import SRSReview from './components/SRSReview';
+import WritingWorkshop from './components/WritingWorkshop';
+import ConversationReplay from './components/ConversationReplay';
 import BadgeToast from './components/BadgeToast';
 import MobileNav from './components/MobileNav';
 import Onboarding from './components/Onboarding';
@@ -260,6 +267,20 @@ function App() {
         return <ToneCalibrator />;
       case 'listening-simulator':
         return <ListeningSimulator />;
+      case 'filler-tracker':
+        return <FillerTracker onStatsUpdate={fetchStats} onBadges={handleBadges} />;
+      case 'placement-test':
+        return <PlacementTest onStatsUpdate={fetchStats} onBadges={handleBadges} />;
+      case 'grammar-lessons':
+        return <GrammarLessons onStatsUpdate={fetchStats} onBadges={handleBadges} />;
+      case 'idiom-engine':
+        return <IdiomEngine onStatsUpdate={fetchStats} onBadges={handleBadges} />;
+      case 'srs-review':
+        return <SRSReview onStatsUpdate={fetchStats} onBadges={handleBadges} />;
+      case 'writing-workshop':
+        return <WritingWorkshop onStatsUpdate={fetchStats} onBadges={handleBadges} />;
+      case 'conversation-replay':
+        return <ConversationReplay onStatsUpdate={fetchStats} />;
       default:
         return <Dashboard stats={stats} navigateTo={navigateTo} />;
     }

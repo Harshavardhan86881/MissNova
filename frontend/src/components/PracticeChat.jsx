@@ -27,7 +27,7 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
     const textInputRef = useRef(null);
     const silenceTimerRef = useRef(null);
     const silenceIntervalRef = useRef(null);
-    const SILENCE_THRESHOLD_MS = 2500; // 2.5 seconds of silence before stopping
+    const SILENCE_THRESHOLD_MS = 3500; // 2.5 seconds of silence before stopping
 
     useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
