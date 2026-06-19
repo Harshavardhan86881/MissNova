@@ -383,11 +383,14 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                                     </div>
                                 )}
                                 <div style={{ marginBottom: '16px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                    <label htmlFor="reset-email" style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                                         Email Address
                                     </label>
                                     <input
+                                        id="reset-email"
+                                        name="email"
                                         type="email" value={resetPasswordEmail}
+                                        autoComplete="email"
                                         onChange={(e) => setResetPasswordEmail(e.target.value)}
                                         placeholder="you@example.com" required
                                         style={{ width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '15px', color: '#fff', outline: 'none', transition: 'all 0.2s ease' }}
@@ -396,11 +399,14 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                                     />
                                 </div>
                                 <div style={{ marginBottom: '16px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                    <label htmlFor="reset-new-password" style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                                         New Password
                                     </label>
                                     <input
+                                        id="reset-new-password"
+                                        name="newPassword"
                                         type="password" value={newPassword}
+                                        autoComplete="new-password"
                                         onChange={(e) => setNewPassword(e.target.value)}
                                         placeholder="At least 8 characters" required minLength={8}
                                         style={{ width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '15px', color: '#fff', outline: 'none', transition: 'all 0.2s ease' }}
@@ -409,11 +415,14 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                                     />
                                 </div>
                                 <div style={{ marginBottom: '24px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                    <label htmlFor="reset-confirm-password" style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                                         Confirm New Password
                                     </label>
                                     <input
+                                        id="reset-confirm-password"
+                                        name="confirmNewPassword"
                                         type="password" value={confirmNewPassword}
+                                        autoComplete="new-password"
                                         onChange={(e) => setConfirmNewPassword(e.target.value)}
                                         placeholder="Repeat new password" required minLength={8}
                                         style={{ width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '15px', color: '#fff', outline: 'none', transition: 'all 0.2s ease' }}
@@ -539,7 +548,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                 <form onSubmit={mode === 'signup' ? handleSignup : handleLogin}>
                     {/* Email field */}
                     <div style={{ marginBottom: '16px' }}>
-                        <label style={{
+                        <label htmlFor="auth-email" style={{
                             display: 'block',
                             fontSize: '13px',
                             fontWeight: '500',
@@ -549,7 +558,10 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                             Email
                         </label>
                         <input
+                            id="auth-email"
+                            name="email"
                             type="email"
+                            autoComplete="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="you@example.com"
@@ -579,7 +591,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                     {/* Username field (signup only) */}
                     {mode === 'signup' && (
                         <div style={{ marginBottom: '16px' }}>
-                            <label style={{
+                            <label htmlFor="auth-username" style={{
                                 display: 'block',
                                 fontSize: '13px',
                                 fontWeight: '500',
@@ -589,7 +601,10 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                                 Username
                             </label>
                             <input
+                                id="auth-username"
+                                name="username"
                                 type="text"
+                                autoComplete="username"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                                 placeholder="johndoe"
@@ -620,7 +635,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
 
                     {/* Password field */}
                     <div style={{ marginBottom: mode === 'signup' ? '8px' : '24px' }}>
-                        <label style={{
+                        <label htmlFor="auth-password" style={{
                             display: 'block',
                             fontSize: '13px',
                             fontWeight: '500',
@@ -631,7 +646,10 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                         </label>
                         <div style={{ position: 'relative' }}>
                             <input
+                                id="auth-password"
+                                name="password"
                                 type={showPassword ? 'text' : 'password'}
+                                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder={mode === 'signup' ? 'Create a strong password' : 'Enter your password'}
@@ -686,7 +704,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                     {/* Confirm Password (signup only) */}
                     {mode === 'signup' && (
                         <div style={{ marginBottom: '24px' }}>
-                            <label style={{
+                            <label htmlFor="auth-confirm-password" style={{
                                 display: 'block',
                                 fontSize: '13px',
                                 fontWeight: '500',
@@ -697,7 +715,10 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                             </label>
                             <div style={{ position: 'relative' }}>
                                 <input
+                                    id="auth-confirm-password"
+                                    name="confirmPassword"
                                     type={showConfirmPassword ? 'text' : 'password'}
+                                    autoComplete="new-password"
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     placeholder="Repeat your password"
@@ -811,9 +832,9 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                     borderTop: '1px solid rgba(255, 255, 255, 0.05)',
                 }}>
                     {[
-                        { icon: <Shield size={14} />, text: 'Argon2id' },
+                        { icon: <Shield size={14} />, text: 'Encrypted' },
                         { icon: <CheckCircle2 size={14} />, text: 'Breach Check' },
-                        { icon: <Zap size={14} />, text: 'JWT Secure' },
+                        { icon: <Zap size={14} />, text: 'Secure Auth' },
                     ].map((badge, i) => (
                         <div key={i} style={{
                             display: 'flex',

@@ -6,6 +6,7 @@ Supports both database-backed users and guest/localStorage mode
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Optional
 import hashlib
@@ -17,6 +18,24 @@ from pathlib import Path
 from models import get_db, User, init_db
 from pydantic import BaseModel, EmailStr, validator
 import re
+
+# --- Rate Limiting for Password Reset ---
+_reset_attempts = defaultdict(list)
+MAX_RESET_ATTEMPTS = 3
+RESET_LOCKOUT_MINUTES = 60
+
+
+def check_reset_rate_limit(email: str) -> bool:
+    """Check if reset attempts exceed limit. Returns True if allowed."""
+    now = datetime.utcnow()
+    cutoff = now - timedelta(minutes=RESET_LOCKOUT_MINUTES)
+    _reset_attempts[email] = [a for a in _reset_attempts[email] if a > cutoff]
+    return len(_reset_attempts[email]) < MAX_RESET_ATTEMPTS
+
+
+def record_reset_attempt(email: str):
+    """Record a password reset attempt."""
+    _reset_attempts[email].append(datetime.utcnow())
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -519,8 +538,20 @@ async def refresh_token(request: Request):
     except Exception:
         pass
 
-    # Fallback: accept any token that looks valid (guest / JSON-stored users)
-    new_token = create_token(user_id_str, username)
+    # Fallback: validate against JSON user store before issuing a new token
+    data = get_user_data()
+    json_user = None
+    for u in data.get("users", []):
+        uid = u.get("id")
+        uname = u.get("username", "")
+        if str(uid) == user_id_str and uname == username:
+            json_user = u
+            break
+
+    if not json_user:
+        raise HTTPException(status_code=401, detail="Invalid token — user not found")
+
+    new_token = create_token(json_user["id"], json_user["username"])
     return {"access_token": new_token, "token_type": "bearer"}
 
 
@@ -542,11 +573,29 @@ class ResetPasswordRequest(BaseModel):
 
 @router.post("/forgot-password")
 async def forgot_password(data: ResetPasswordRequest):
-    """Reset password directly (demo mode — no email delivery required)."""
+    """Reset password (demo mode — no email delivery required).
+
+    Rate-limited to prevent brute-force abuse.
+    """
+    # Rate limiting
+    if not check_reset_rate_limit(data.email):
+        raise HTTPException(
+            status_code=429,
+            detail={"message": f"Too many reset attempts. Try again in {RESET_LOCKOUT_MINUTES} minutes."},
+        )
+    record_reset_attempt(data.email)
+
     if len(data.new_password) < 8:
         raise HTTPException(
             status_code=400,
             detail={"message": "Password must be at least 8 characters"},
+        )
+
+    # Validate password strength
+    if data.new_password.lower() in {"password", "12345678", "qwerty123", "abcdefgh"}:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Password is too common. Choose a stronger password."},
         )
 
     # Try DB first
@@ -559,7 +608,7 @@ async def forgot_password(data: ResetPasswordRequest):
             user.salt = salt
             db.commit()
             _sync_password_to_json(data.email, hashed_pw, salt)
-            return {"success": True, "message": "Password updated successfully"}
+            return {"success": True, "message": "If that account exists, the password has been updated"}
     except HTTPException:
         raise
     except Exception as e:
