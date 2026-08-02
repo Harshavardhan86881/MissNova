@@ -3,79 +3,59 @@
 ![Miss Nova Badge](https://img.shields.io/badge/Status-Beta-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-yellow)
-![React](https://img.shields.io/badge/React-18-cyan)
+![React](https://img.shields.io/badge/React-19-cyan)
 
-**Miss Nova** is an interactive, AI-powered English communication learning platform designed to help users improve their speaking confidence through real-time voice practice, scenario-based roleplay, and gamified learning.
+**Miss Nova** is an interactive, AI-powered English communication learning platform: real-time voice/text practice, scenario roleplay, vocabulary and pronunciation drills, professional communication tools, and gamified progress (XP, levels, streaks, badges).
 
-## 🚀 Features
+## Features
 
-- **Real-time Voice Practice**: Speak naturally with an AI tutor that offers instant corrections on grammar, pronunciation, and fluency.
-- **Scenario Roleplay**: Practice real-world situations like job interviews, ordering coffee, or social networking.
-- **Gamification**: Earn XP, level up, maintain streaks, and collect badges as you learn.
-- **Daily Vocabulary**: Learn new words every day with context-aware practice and evaluation.
-- **Tongue Twisters**: Challenge your pronunciation with fun, graded tongue twisters.
-- **Progress Tracking**: Visualize your improvements with detailed stats and charts.
+- Real-time practice with grammar/fluency feedback (Groq + Web Speech API)
+- Scenario roleplay, tongue twisters, daily challenge & daily vocab
+- Tools: translate, BLUF, tone calibrator, listening simulator, fillers, grammar, idioms, SRS, writing workshop
+- Progress dashboard, badges, streaks
 
-## 🛠️ Tech Stack
+## Tech stack
 
-- **Frontend**: React 18, Vite, Tailwind CSS, Lucide React
-- **Backend**: FastAPI (Python), SQLAlchemy (SQLite)
-- **AI**: Groq API (Llama 3.3 70B)
-- **Speech**: Web Speech API (Recognition & Synthesis)
+- **Frontend:** React 19, Vite, Tailwind CSS 4
+- **Backend:** FastAPI (Python), SQLAlchemy (auth DB), per-user JSON progress
+- **AI:** Groq (`llama-3.3-70b-versatile`)
+- **Speech:** Web Speech API (browser)
 
-## 📦 Installation
+## Quick start
 
-### Prerequisites
-- Node.js (v18+)
-- Python (v3.10+)
-- [Groq API Key](https://console.groq.com/)
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/harsha8688/MissNova.git
-cd MissNova
-```
-
-### 2. Backend Setup
-Navigate to the backend directory and set up the Python environment:
+**Prerequisites:** Node 18+, Python 3.10+, [Groq API key](https://console.groq.com/)
 
 ```bash
+# Backend
 cd backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Windows: venv\Scripts\activate
+# Unix: source venv/bin/activate
 pip install -r requirements.txt
-```
-
-Create a `.env` file in the `backend/` directory:
-```bash
-cp .env.example .env
-# Edit .env and add your GROQ_API_KEY
-```
-
-Run the backend server:
-```bash
+cp .env.example .env   # set GROQ_API_KEY
 uvicorn main:app --reload
-```
-The API will run at `http://localhost:8000`.
 
-### 3. Frontend Setup
-Open a new terminal, navigate to the frontend directory:
-
-```bash
+# Frontend (new terminal)
 cd frontend
 npm install
 npm run dev
 ```
-The application will open at `http://localhost:5173`.
 
-## 📖 Documentation
+- App: http://localhost:5173  
+- API: http://localhost:8000  
 
-For detailed technical documentation, including architecture diagrams, API reference, and component breakdown, please refer to [DOCUMENTATION.md](DOCUMENTATION.md).
+Full setup, env vars, and “where to change X”: **[docs/06-developer-guide.md](docs/06-developer-guide.md)**
 
-## 🤝 Contributing
+## Documentation
 
-Contributions are welcome! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Start at **[docs/README.md](docs/README.md)** (architecture, API, deployment, glossary).
 
-## 📄 License
+Legacy paths: [DOCUMENTATION.md](DOCUMENTATION.md) and [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) redirect into `docs/`.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

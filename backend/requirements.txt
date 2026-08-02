@@ -11,4 +11,3 @@ passlib[argon2]
 python-jose[cryptography]
 httpx
 email-validator
-psycopg2-binary
