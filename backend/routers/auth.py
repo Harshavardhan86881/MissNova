@@ -6,6 +6,7 @@ Supports both database-backed users and guest/localStorage mode
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -74,7 +75,7 @@ class UserSignup(BaseModel):
 
     @validator("email")
     def strip_email(cls, v):
-        return v.strip()
+        return v.strip().lower()
 
     @validator("password")
     def strip_password(cls, v):
@@ -87,7 +88,7 @@ class UserLogin(BaseModel):
 
     @validator("email")
     def strip_email(cls, v):
-        return v.strip()
+        return v.strip().lower()
 
     @validator("password")
     def strip_password(cls, v):
@@ -131,7 +132,7 @@ async def signup(user_data: UserSignup, request: Request, response: Response):
         db = next(get_db())
 
         # Check if user exists
-        if db.query(User).filter(User.email == user_data.email).first():
+        if db.query(User).filter(func.lower(User.email) == user_data.email.lower()).first():
             raise HTTPException(
                 status_code=400,
                 detail={"field": "email", "message": "Email already registered"},
@@ -228,12 +229,12 @@ async def signup(user_data: UserSignup, request: Request, response: Response):
 
         # Check if user exists
         for u in data["users"]:
-            if u.get("email") == user_data.email:
+            if u.get("email", "").strip().lower() == user_data.email.lower():
                 raise HTTPException(
                     status_code=400,
                     detail={"field": "email", "message": "Email already registered"},
                 )
-            if u.get("username") == user_data.username:
+            if u.get("username", "").strip().lower() == user_data.username.strip().lower():
                 raise HTTPException(
                     status_code=400,
                     detail={"field": "username", "message": "Username already taken"},
@@ -297,7 +298,11 @@ async def login(user_data: UserLogin, request: Request, response: Response):
     try:
         db = next(get_db())
 
-        user = db.query(User).filter(User.email == user_data.email).first()
+        user = (
+            db.query(User)
+            .filter(func.lower(User.email) == user_data.email.lower())
+            .first()
+        )
 
         if user:
             # Record found in DB — validate password here; do NOT fall back to JSON.
@@ -343,8 +348,8 @@ async def login(user_data: UserLogin, request: Request, response: Response):
 
     json_user = None
     for u in data.get("users", []):
-        # Strip both sides to guard against accidental whitespace
-        if u.get("email", "").strip() == user_data.email:
+        # Strip both sides to guard against accidental whitespace / case
+        if u.get("email", "").strip().lower() == user_data.email.strip().lower():
             json_user = u
             break
 
@@ -564,7 +569,7 @@ class ResetPasswordRequest(BaseModel):
 
     @validator("email")
     def strip_email(cls, v):
-        return v.strip()
+        return v.strip().lower()
 
     @validator("new_password")
     def strip_password(cls, v):
@@ -601,7 +606,7 @@ async def forgot_password(data: ResetPasswordRequest):
     # Try DB first
     try:
         db = next(get_db())
-        user = db.query(User).filter(User.email == data.email).first()
+        user = db.query(User).filter(func.lower(User.email) == data.email.lower()).first()
         if user:
             hashed_pw, salt = simple_hash(data.new_password)
             user.hashed_password = hashed_pw
@@ -629,7 +634,7 @@ def _sync_password_to_json(email: str, hashed_pw: str, salt: str):
     try:
         store = get_user_data()
         for u in store.get("users", []):
-            if u.get("email", "").strip() == email:
+            if u.get("email", "").strip().lower() == email.strip().lower():
                 u["hashed_password"] = hashed_pw
                 u["salt"] = salt
                 save_user_data(store)
@@ -643,7 +648,7 @@ def _reset_password_json(email: str, new_password: str) -> dict:
     store = get_user_data()
     json_user = None
     for u in store.get("users", []):
-        if u.get("email", "").strip() == email:
+        if u.get("email", "").strip().lower() == email.strip().lower():
             json_user = u
             break
 
