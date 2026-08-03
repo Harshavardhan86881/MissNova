@@ -114,7 +114,7 @@ const DailyChallenge = ({ onStatsUpdate, onBadges, language = 'english' }) => {
 
     if (!challenge) {
         return (
-            <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
                 <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
                 <p>Loading today's challenge...</p>
                 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
@@ -123,19 +123,21 @@ const DailyChallenge = ({ onStatsUpdate, onBadges, language = 'english' }) => {
     }
 
     return (
-        <div style={{ maxWidth: '650px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '24px' }}>
+        <div className="page-shell page-shell-sm">
+            <div className="page-header">
+                <div>
                 <h1 style={{ fontSize: '28px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                     <Target size={26} style={{ color: '#f59e0b' }} /> Daily Challenge
                 </h1>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
                     Complete today's challenge to earn bonus XP
                 </p>
+                </div>
             </div>
 
             {/* Challenge Card */}
             <div className="glass-card" style={{
-                padding: '28px', textAlign: 'center', marginBottom: '20px',
+                padding: '24px', textAlign: 'center', marginBottom: '20px',
                 borderTop: '3px solid #f59e0b',
             }}>
                 {challenge.completed ? (

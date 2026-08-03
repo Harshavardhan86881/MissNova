@@ -100,7 +100,7 @@ const SRSReview = ({ onStatsUpdate, onBadges }) => {
     if (loading) return <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}><Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} /><p style={{ marginTop: 12 }}>Loading review queue...</p></div>;
 
     return (
-        <div style={{ maxWidth: 700, margin: '0 auto' }}>
+        <div className="page-shell page-shell-sm">
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>

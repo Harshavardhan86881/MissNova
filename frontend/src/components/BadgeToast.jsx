@@ -15,7 +15,7 @@ const BadgeToast = ({ badge, onDismiss, stats }) => {
 
     return (
         <div
-            className={exiting ? 'toast-exit' : 'toast-enter'}
+            className={`mobile-toast ${exiting ? 'toast-exit' : 'toast-enter'}`}
             style={{
                 position: 'fixed',
                 bottom: '100px',
@@ -30,8 +30,11 @@ const BadgeToast = ({ badge, onDismiss, stats }) => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '14px',
-                minWidth: '340px',
+                minWidth: 'min(340px, calc(100vw - 24px))',
+                width: 'calc(100% - 24px)',
+                maxWidth: '420px',
                 boxShadow: '0 10px 40px rgba(139, 92, 246, 0.3)',
+                boxSizing: 'border-box',
             }}
         >
             <div style={{ fontSize: '36px' }}>{badge.icon}</div>

@@ -63,21 +63,23 @@ const Scenarios = ({ navigateTo, userLevel = 1 }) => {
     const getDiffClass = (diff) => `diff-${diff.toLowerCase()}`;
 
     return (
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+        <div className="page-shell">
             {/* Header */}
-            <div style={{ marginBottom: '24px' }}>
+            <div className="page-header">
+                <div>
                 <h1 style={{ fontSize: '28px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                     <MessageSquare size={26} style={{ color: '#ec4899' }} /> Practice Scenarios
                 </h1>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
                     Practice real-life communication situations with AI roleplay
                 </p>
+                </div>
             </div>
 
             {/* Search & Filter */}
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <div className="touch-row">
                 <div style={{
-                    flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: '8px',
+                    flex: 1, minWidth: '0', display: 'flex', alignItems: 'center', gap: '8px',
                     background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
                     borderRadius: '12px', padding: '0 14px',
                 }}>
@@ -106,11 +108,7 @@ const Scenarios = ({ navigateTo, userLevel = 1 }) => {
             </div>
 
             {/* Scenario Grid */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: '16px',
-            }}>
+            <div className="grid-cards" style={{ gap: '16px' }}>
                 {filtered.map(scenario => {
                     const recommendation = getLevelRecommendation(scenario.difficulty, userLvl);
                     return (

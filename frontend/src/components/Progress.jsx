@@ -57,8 +57,8 @@ const Progress = () => {
     const accuracyHistory = progress.accuracy_history || [];
 
     return (
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div className="page-shell">
+            <div className="page-header">
                 <div>
                     <h1 style={{ fontSize: '28px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                         <Trophy size={26} style={{ color: '#fbbf24' }} /> Your Progress
@@ -67,16 +67,13 @@ const Progress = () => {
                         Track your communication learning journey
                     </p>
                 </div>
-                <ShareButton stats={progress || {}} variant="button" />
+                <div className="page-header-actions">
+                    <ShareButton stats={progress || {}} variant="button" />
+                </div>
             </div>
 
             {/* Top Stats */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                gap: '12px',
-                marginBottom: '28px',
-            }}>
+            <div className="grid-stats" style={{ marginBottom: '28px' }}>
                 {[
                     { icon: Zap, label: 'Total XP', value: progress.xp?.toLocaleString(), color: '#fbbf24' },
                     { icon: Star, label: 'Level', value: progress.level, color: '#a78bfa' },
@@ -98,7 +95,7 @@ const Progress = () => {
 
             {/* Level Progress */}
             <div className="glass-card" style={{ padding: '22px', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div style={{
                             width: '50px', height: '50px', borderRadius: '14px',
@@ -127,7 +124,7 @@ const Progress = () => {
             </div>
 
             {/* Two columns */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '20px', marginBottom: '28px' }}>
+            <div className="grid-responsive-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '20px', marginBottom: '28px' }}>
 
                 {/* Skills */}
                 <div className="glass-card" style={{ padding: '22px' }}>
@@ -225,7 +222,7 @@ const Progress = () => {
                 </h3>
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 140px), 1fr))',
                     gap: '12px',
                 }}>
                     {ALL_POSSIBLE_BADGES.map(badge => {

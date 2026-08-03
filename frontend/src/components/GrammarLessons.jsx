@@ -117,7 +117,7 @@ const GrammarLessons = ({ onStatsUpdate, onBadges }) => {
     };
 
     return (
-        <div style={{ maxWidth: 820, margin: '0 auto' }}>
+        <div className="page-shell page-shell-md">
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
@@ -147,7 +147,7 @@ const GrammarLessons = ({ onStatsUpdate, onBadges }) => {
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 14 }}>
+                    <div className="grid-cards" style={{ gap: 14 }}>
                         {GRAMMAR_TOPICS.map(topic => {
                             const done = completedTopics.includes(topic.id);
                             return (

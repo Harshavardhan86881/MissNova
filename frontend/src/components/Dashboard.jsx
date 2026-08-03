@@ -321,9 +321,9 @@ const Dashboard = ({ stats, navigateTo }) => {
     const levelProgress = stats ? (stats.xp_in_level / stats.xp_for_next_level) * 100 : 0;
 
     return (
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+        <div className="page-shell">
             {/* Header with Share Button */}
-            <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div className="page-header">
                 <div>
                     <h1 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '6px' }}>
                         Welcome back! <span style={{ fontSize: '28px' }}>👋</span>
@@ -333,13 +333,15 @@ const Dashboard = ({ stats, navigateTo }) => {
                     </p>
                 </div>
                 {stats && (
-                    <ShareButton stats={stats} variant="button" />
+                    <div className="page-header-actions">
+                        <ShareButton stats={stats} variant="button" />
+                    </div>
                 )}
             </div>
 
             {/* Streak At Risk Warning Banner */}
             {streakAtRisk && (
-                <div style={{
+                <div className="stack-on-mobile" style={{
                     padding: '16px 20px',
                     marginBottom: '20px',
                     borderRadius: '14px',
@@ -349,7 +351,7 @@ const Dashboard = ({ stats, navigateTo }) => {
                     animation: 'pulse-subtle 2s ease-in-out infinite',
                 }}>
                     <AlertTriangle size={24} style={{ color: '#ef4444', flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: '700', fontSize: '14px', color: '#ef4444', marginBottom: '2px' }}>
                             🔥 Your {stats.streak_days}-day streak is at risk!
                         </div>
@@ -378,7 +380,7 @@ const Dashboard = ({ stats, navigateTo }) => {
 
             {/* Level Progress Ring + Daily Goal + Leaderboard */}
             {stats && (
-                <div style={{
+                <div className="grid-responsive-2" style={{
                     display: 'grid',
                     gridTemplateColumns: 'auto 1fr',
                     gap: '24px',
@@ -435,7 +437,7 @@ const Dashboard = ({ stats, navigateTo }) => {
             {stats && (
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))',
                     gap: '12px',
                     marginBottom: '28px',
                 }}>
@@ -713,7 +715,7 @@ const Dashboard = ({ stats, navigateTo }) => {
             </h2>
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
                 gap: '14px',
                 marginBottom: '28px',
             }}>

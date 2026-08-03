@@ -122,7 +122,7 @@ const TranslateInput = ({ onStatsUpdate, onBadges }) => {
     };
 
     return (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div className="page-shell page-shell-md">
             {/* Header */}
             <div style={{ marginBottom: '28px' }}>
                 <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '12px' }}>

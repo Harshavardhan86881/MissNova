@@ -188,24 +188,26 @@ const ScenarioChat = ({ scenario, navigateTo, onStatsUpdate, onBadges, language 
     const getDiffClass = (diff) => `diff-${diff.toLowerCase()}`;
 
     return (
-        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+        <div className="page-shell page-shell-sm">
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div className="page-header" style={{ alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
                 <button
                     onClick={() => navigateTo('scenarios')}
                     style={{
                         background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
                         borderRadius: '10px', padding: '8px', cursor: 'pointer', color: 'var(--text-secondary)',
+                        flexShrink: 0,
                     }}
                 >
                     <ArrowLeft size={18} />
                 </button>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <span style={{ fontSize: '28px' }}>{scenario.icon}</span>
-                        <div>
+                        <div style={{ minWidth: 0 }}>
                             <h1 style={{ fontSize: '22px', fontWeight: '800' }}>{scenario.title}</h1>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '2px' }}>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '2px', flexWrap: 'wrap' }}>
                                 <span className={getDiffClass(scenario.difficulty)} style={{
                                     fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px',
                                 }}>
@@ -216,6 +218,8 @@ const ScenarioChat = ({ scenario, navigateTo, onStatsUpdate, onBadges, language 
                         </div>
                     </div>
                 </div>
+                </div>
+                <div className="page-header-actions">
                 <button
                     onClick={() => setInputMode(inputMode === 'voice' ? 'text' : 'voice')}
                     className="btn-secondary"
@@ -223,6 +227,7 @@ const ScenarioChat = ({ scenario, navigateTo, onStatsUpdate, onBadges, language 
                 >
                     {inputMode === 'voice' ? <Keyboard size={16} /> : <Mic size={16} />}
                 </button>
+                </div>
             </div>
 
             {/* Current Prompt */}
@@ -265,11 +270,9 @@ const ScenarioChat = ({ scenario, navigateTo, onStatsUpdate, onBadges, language 
             )}
 
             {/* Chat */}
-            <div style={{
+            <div className="chat-panel" style={{
                 background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-                borderRadius: '20px', padding: '20px', minHeight: '350px',
-                maxHeight: '450px', overflowY: 'auto', marginBottom: '16px',
-                display: 'flex', flexDirection: 'column', gap: '14px',
+                borderRadius: '20px', padding: '20px', marginBottom: '16px',
             }}>
                 {chatHistory.length === 0 && !loading && (
                     <div style={{

@@ -57,7 +57,7 @@ const ToneCalibrator = () => {
   const circumference = 2 * Math.PI * 38;
 
   return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '0 8px' }}>
+    <div className="page-shell page-shell-md" style={{ padding: '0 8px' }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
@@ -201,7 +201,7 @@ const ToneCalibrator = () => {
             </div>
 
             {/* Verdict + labels */}
-            <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               {result.one_line_verdict && (
                 <div style={{
                   padding: '10px 14px', borderRadius: 10, marginBottom: 12,

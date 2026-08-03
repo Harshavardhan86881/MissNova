@@ -69,7 +69,7 @@ const ConversationReplay = ({ onStatsUpdate }) => {
     if (loading) return <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}><Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} /><p style={{ marginTop: 12 }}>Loading conversation history...</p></div>;
 
     return (
-        <div style={{ maxWidth: 840, margin: '0 auto' }}>
+        <div className="page-shell">
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
@@ -205,7 +205,7 @@ const ConversationReplay = ({ onStatsUpdate }) => {
 
                             {/* Scores */}
                             {report.scores && (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10, marginBottom: 20 }}>
+                                <div className="grid-stats" style={{ gap: 10, marginBottom: 20 }}>
                                     {Object.entries(report.scores).map(([key, value]) => (
                                         <div key={key} style={{ padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, textAlign: 'center' }}>
                                             <div style={{ fontSize: 22, fontWeight: 800, color: getScoreColor(value) }}>{value}</div>

@@ -98,7 +98,7 @@ const PlacementTest = ({ onStatsUpdate, onBadges }) => {
     const cefrInfo = result ? CEFR_INFO[result.cefr_level] || CEFR_INFO['B1'] : null;
 
     return (
-        <div style={{ maxWidth: 820, margin: '0 auto' }}>
+        <div className="page-shell page-shell-md">
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
@@ -146,7 +146,7 @@ const PlacementTest = ({ onStatsUpdate, onBadges }) => {
                         {/* CEFR Level Overview */}
                         <div style={{ marginBottom: 24 }}>
                             <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>CEFR Levels</h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                            <div className="grid-stats" style={{ gap: 8 }}>
                                 {Object.entries(CEFR_INFO).map(([level, info]) => (
                                     <div key={level} style={{ padding: '10px 14px', borderRadius: 10, background: `${info.color}11`, border: `1px solid ${info.color}33` }}>
                                         <div style={{ fontWeight: 800, color: info.color, fontSize: 16 }}>{level}</div>

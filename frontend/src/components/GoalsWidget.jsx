@@ -153,7 +153,7 @@ const GoalsWidget = ({ stats, onUpdate }) => {
 
     return (
         <div style={{ marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div className="page-header" style={{ marginBottom: '16px', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Target size={20} style={{ color: '#8b5cf6' }} />
                     My Goals

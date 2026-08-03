@@ -132,15 +132,16 @@ export const NotificationBanner = ({ stats, onDismiss }) => {
     if (!visible) return null;
 
     return (
-        <div style={{
+        <div className="mobile-toast" style={{
             position: 'fixed',
             bottom: '100px',
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 150,
             maxWidth: '420px',
-            width: 'calc(100% - 48px)',
+            width: 'calc(100% - 24px)',
             animation: 'toastIn 0.4s ease forwards',
+            boxSizing: 'border-box',
         }}>
             <div style={{
                 background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.1))',

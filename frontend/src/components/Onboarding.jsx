@@ -894,7 +894,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
             </p>
 
             {/* Feature highlights */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', maxWidth: '420px', margin: '0 auto 36px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', maxWidth: '420px', margin: '0 auto 36px' }} className="onboarding-feature-grid">
                 {[
                     { icon: <Mic size={20} />, label: 'Voice Practice', color: '#8b5cf6' },
                     { icon: <MessageSquare size={20} />, label: 'Live Scenarios', color: '#ec4899' },
@@ -947,7 +947,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                             Choose your target language — you can change this later
                         </p>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', maxWidth: '480px', margin: '0 auto' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', maxWidth: '480px', margin: '0 auto' }} className="onboarding-choice-grid">
                             {LEARNING_LANGUAGES.map(lang => {
                                 const isSelected = selectedLanguage === lang.code;
                                 return (
@@ -997,7 +997,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
                             Select all that apply — we'll personalize your experience
                         </p>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', maxWidth: '480px', margin: '0 auto' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', maxWidth: '480px', margin: '0 auto' }} className="onboarding-choice-grid">
                             {GOALS.map(goal => {
                                 const isSelected = selectedGoals.includes(goal.id);
                                 return (
@@ -1226,9 +1226,10 @@ const Onboarding = ({ onComplete, navigateTo }) => {
             )}
 
             {/* Content */}
-            <div style={{
+            <div className="onboarding-card" style={{
                 maxWidth: '560px', width: '100%',
                 position: 'relative', zIndex: 1,
+                boxSizing: 'border-box',
             }}>
                 {mode === 'welcome' && renderWelcome()}
                 {(mode === 'login' || mode === 'signup') && renderAuthForm()}
@@ -1237,7 +1238,7 @@ const Onboarding = ({ onComplete, navigateTo }) => {
 
             {/* Navigation Buttons - only for preference steps */}
             {step > 0 && step < 4 && mode !== 'welcome' && mode !== 'login' && mode !== 'signup' && (
-                <div style={{
+                <div className="stack-on-mobile" style={{
                     display: 'flex', gap: '12px', marginTop: '36px',
                     position: 'relative', zIndex: 1,
                 }}>

@@ -113,7 +113,7 @@ const TongueTwisters = ({ onStatsUpdate, onBadges, language = 'english' }) => {
 
     if (selectedTwister) {
         return (
-            <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <div className="page-shell page-shell-sm">
                 <button
                     onClick={() => { setSelectedTwister(null); setResult(null); setTranscript(''); }}
                     style={{
@@ -125,7 +125,7 @@ const TongueTwisters = ({ onStatsUpdate, onBadges, language = 'english' }) => {
                     ← Back to Tongue Twisters
                 </button>
 
-                <div className="glass-card" style={{ padding: '28px', textAlign: 'center', marginBottom: '20px' }}>
+                <div className="glass-card" style={{ padding: '24px', textAlign: 'center', marginBottom: '20px' }}>
                     <span className={getDiffClass(selectedTwister.difficulty)} style={{
                         fontSize: '10px', fontWeight: '600', padding: '4px 12px',
                         borderRadius: '20px', display: 'inline-block', marginBottom: '16px',
@@ -134,7 +134,7 @@ const TongueTwisters = ({ onStatsUpdate, onBadges, language = 'english' }) => {
                     </span>
 
                     <p style={{
-                        fontSize: '22px', fontWeight: '700', lineHeight: '1.6',
+                        fontSize: 'clamp(18px, 4vw, 22px)', fontWeight: '700', lineHeight: '1.6',
                         color: 'var(--text-primary)', marginBottom: '8px',
                     }}>
                         "{selectedTwister.text}"
@@ -263,18 +263,20 @@ const TongueTwisters = ({ onStatsUpdate, onBadges, language = 'english' }) => {
     }
 
     return (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '24px' }}>
+        <div className="page-shell page-shell-md">
+            <div className="page-header">
+                <div>
                 <h1 style={{ fontSize: '28px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                     <Languages size={26} style={{ color: '#06b6d4' }} /> Pronunciation Practice
                 </h1>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
                     Master pronunciation with tongue twisters — listen, repeat, and get scored
                 </p>
+                </div>
             </div>
 
             {/* Filter */}
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '20px' }}>
+            <div className="touch-row" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                 {difficulties.map(d => (
                     <button key={d} onClick={() => setFilter(d)} className={`tab-btn ${filter === d ? 'active' : ''}`}>
                         {d}

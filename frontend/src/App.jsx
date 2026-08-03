@@ -299,15 +299,7 @@ function App() {
       />
 
       {/* Main Content */}
-      <main style={{
-        flex: 1,
-        marginLeft: '260px',
-        padding: '24px 32px',
-        paddingBottom: '100px',
-        position: 'relative',
-        zIndex: 1,
-        minHeight: '100vh',
-      }}>
+      <main className="app-main">
         <div className="page-enter" key={currentPage}>
           {renderPage()}
         </div>
@@ -323,17 +315,6 @@ function App() {
 
       {/* Notification Permission Banner */}
       <NotificationBanner stats={stats} />
-
-      {/* Responsive styles */}
-      <style>{`
-        @media (max-width: 768px) {
-          main {
-            margin-left: 0 !important;
-            padding: 16px !important;
-            padding-bottom: 90px !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }

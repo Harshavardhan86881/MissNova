@@ -31,20 +31,22 @@ const VocabularyBank = () => {
         });
 
     return (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '24px' }}>
+        <div className="page-shell page-shell-md">
+            <div className="page-header">
+                <div>
                 <h1 style={{ fontSize: '28px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                     <BookOpen size={26} style={{ color: '#f472b6' }} /> Vocabulary Bank
                 </h1>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
                     Words you've learned from conversations — {words.length} total
                 </p>
+                </div>
             </div>
 
             {/* Search & Sort */}
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <div className="touch-row">
                 <div style={{
-                    flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: '8px',
+                    flex: 1, minWidth: '0', display: 'flex', alignItems: 'center', gap: '8px',
                     background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
                     borderRadius: '12px', padding: '0 14px',
                 }}>
@@ -58,7 +60,7 @@ const VocabularyBank = () => {
                         }}
                     />
                 </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     {[
                         { id: 'newest', label: 'Newest' },
                         { id: 'alphabetical', label: 'A-Z' },
@@ -72,11 +74,7 @@ const VocabularyBank = () => {
 
             {/* Words Grid */}
             {filtered.length > 0 ? (
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-                    gap: '12px',
-                }}>
+                <div className="grid-cards">
                     {filtered.map((word, i) => (
                         <div key={i} className="vocab-card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>

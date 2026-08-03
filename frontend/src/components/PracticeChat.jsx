@@ -236,9 +236,9 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
     };
 
     return (
-        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+        <div className="page-shell page-shell-sm">
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div className="page-header">
                 <div>
                     <h1 style={{ fontSize: '24px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Sparkles size={22} style={{ color: '#a78bfa' }} /> Free Practice
@@ -247,7 +247,7 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
                         Talk to Miss Nova about anything
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div className="page-header-actions">
                     <button
                         onClick={() => setInputMode(inputMode === 'voice' ? 'text' : 'voice')}
                         className="btn-secondary"
@@ -277,18 +277,12 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
             )}
 
             {/* Chat Area */}
-            <div style={{
+            <div className="chat-panel" style={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border-subtle)',
                 borderRadius: '20px',
                 padding: '20px',
-                minHeight: '400px',
-                maxHeight: '500px',
-                overflowY: 'auto',
                 marginBottom: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '14px',
             }}>
                 {chatHistory.length === 0 && !loading && (
                     <div style={{

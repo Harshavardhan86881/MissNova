@@ -261,7 +261,7 @@ const ListeningSimulator = () => {
   // --- Phase: Role Selection ---
   if (phase === 'select') {
     return (
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 8px' }}>
+      <div className="page-shell page-shell-md" style={{ padding: '0 8px' }}>
         <div style={{ marginBottom: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
             <div style={{
@@ -384,7 +384,7 @@ const ListeningSimulator = () => {
         </div>
 
         {/* Role cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+        <div className="grid-cards" style={{ gap: 14 }}>
           {ROLES.map((role) => (
             <button
               key={role.id}
@@ -440,7 +440,7 @@ const ListeningSimulator = () => {
 
   // --- Phase: Chat ---
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 8px' }}>
+    <div className="page-shell page-shell-md" style={{ padding: '0 8px' }}>
       {/* Header */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',

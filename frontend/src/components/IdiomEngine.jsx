@@ -88,7 +88,7 @@ const IdiomEngine = ({ onStatsUpdate, onBadges }) => {
     if (initialLoading) return <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}><Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} /></div>;
 
     return (
-        <div style={{ maxWidth: 820, margin: '0 auto' }}>
+        <div className="page-shell page-shell-md">
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>

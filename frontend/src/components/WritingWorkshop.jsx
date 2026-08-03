@@ -96,7 +96,7 @@ const WritingWorkshop = ({ onStatsUpdate, onBadges }) => {
     };
 
     return (
-        <div style={{ maxWidth: 840, margin: '0 auto' }}>
+        <div className="page-shell">
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
@@ -114,7 +114,7 @@ const WritingWorkshop = ({ onStatsUpdate, onBadges }) => {
             {!selectedFormat && (
                 <div>
                     <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Choose a writing format:</h2>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+                    <div className="grid-cards" style={{ gap: 14 }}>
                         {FORMATS.map(format => (
                             <button key={format.id} onClick={() => selectFormat(format)} style={{ padding: 20, borderRadius: 14, border: '1px solid var(--border-color)', background: 'var(--card-bg)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s' }}>
                                 <div style={{ fontSize: 28, marginBottom: 10 }}>{format.emoji}</div>
@@ -195,7 +195,7 @@ const WritingWorkshop = ({ onStatsUpdate, onBadges }) => {
                                 <div style={{ fontSize: 48, fontWeight: 900, color: getScoreColor(result.overall_score || 0) }}>{result.overall_score ?? '—'}</div>
                                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>Overall Score</div>
                             </div>
-                            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10 }}>
+                            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 100px), 1fr))', gap: 10 }}>
                                 {[
                                     { label: 'Grammar', score: result.grammar_score },
                                     { label: 'Style', score: result.style_score },

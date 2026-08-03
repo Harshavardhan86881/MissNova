@@ -107,7 +107,7 @@ const FillerTracker = ({ onStatsUpdate, onBadges }) => {
     };
 
     return (
-        <div style={{ maxWidth: 820, margin: '0 auto' }}>
+        <div className="page-shell page-shell-md">
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
@@ -187,7 +187,7 @@ const FillerTracker = ({ onStatsUpdate, onBadges }) => {
                                 <div style={{ fontSize: 48, fontWeight: 900, color: getScoreColor(result.filler_free_score || 0) }}>{result.filler_free_score ?? 0}</div>
                                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>Filler-Free Score</div>
                             </div>
-                            <div style={{ flex: 1, minWidth: 200 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                     <div style={{ padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
                                         <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>{result.total_words || 0}</div>

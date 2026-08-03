@@ -57,7 +57,7 @@ const BLUFGenerator = () => {
   };
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 8px' }}>
+    <div className="page-shell page-shell-md" style={{ padding: '0 8px' }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
