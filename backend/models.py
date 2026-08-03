@@ -11,10 +11,27 @@ import os
 
 Base = declarative_base()
 
-# Database URL
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./voice_tutor.db")
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
+def _normalize_database_url(url: str) -> str:
+    """Normalize hosted Postgres URLs for SQLAlchemy + serverless SSL."""
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    if url.startswith("postgresql") and "sslmode=" not in url:
+        url += ("&" if "?" in url else "?") + "sslmode=require"
+    return url
+
+
+# Database URL
+DATABASE_URL = _normalize_database_url(
+    os.getenv("DATABASE_URL", "sqlite:///./voice_tutor.db")
+)
+
+_connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=_connect_args,
+    pool_pre_ping=True,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -28,8 +45,12 @@ def get_db():
 
 
 def init_db():
-    """Initialize database tables."""
-    Base.metadata.create_all(bind=engine)
+    """Initialize database tables. Soft-fail so API can still boot if DB is down."""
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as exc:
+        # Don't crash the whole serverless function — practice/stats use JSON files.
+        print(f"WARNING: init_db failed ({type(exc).__name__}): {exc}")
 
 
 class User(Base):

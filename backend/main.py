@@ -30,7 +30,9 @@ app.include_router(auth_router.router)
 
 # Allow credentials requires explicit origins (wildcard + credentials is forbidden by browsers)
 _ALLOWED_ORIGINS = [
+    "https://missnova.vercel.app",
     "https://miss-nova.vercel.app",
+    "https://miss-nova-khaki.vercel.app",
     "https://miss-nova-harsha8688s-projects.vercel.app",
     "http://localhost:5173",
     "http://localhost:3000",
