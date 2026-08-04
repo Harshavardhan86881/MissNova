@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Activity, Mic, MicOff, Loader2, AlertCircle, TrendingDown, RotateCcw, BarChart2, ChevronDown, ChevronUp } from 'lucide-react';
 import { authFetch } from '../utils/authFetch';
+import { parseSpeechResultEvent } from '../utils/speechTranscript';
 
 const FILLER_EXAMPLES = ['um', 'uh', 'like', 'you know', 'basically', 'actually', 'literally', 'sort of', 'kind of', 'I mean', 'right', 'so', 'well', 'honestly'];
 
@@ -38,17 +39,7 @@ const FillerTracker = ({ onStatsUpdate, onBadges }) => {
         let silenceTimer = null;
 
         recognition.onresult = (e) => {
-            // Rebuild + assign from cumulative results[] (do not append rebuilds).
-            let finalText = '';
-            let interim = '';
-            for (let i = 0; i < e.results.length; i++) {
-                const piece = e.results[i][0].transcript;
-                if (e.results[i].isFinal) {
-                    finalText += piece + ' ';
-                } else {
-                    interim += piece;
-                }
-            }
+            const { finalText, interim } = parseSpeechResultEvent(e);
             finalTranscriptRef.current = finalText;
             setTranscript(finalText);
             setInterimTranscript(interim);

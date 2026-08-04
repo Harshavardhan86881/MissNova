@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic, MicOff, Volume2, RotateCcw, Loader2, AlertCircle, Send, Keyboard, Sparkles } from 'lucide-react';
 import { authFetch } from '../utils/authFetch';
+import { parseSpeechResultEvent } from '../utils/speechTranscript';
 
 const LANG_CODES = {
     english: 'en-US', spanish: 'es-ES', french: 'fr-FR', german: 'de-DE',
@@ -204,23 +205,9 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
         };
 
         recognition.onresult = (event) => {
-            // Web Speech API keeps a cumulative results[] for the whole session.
-            // After a pause, onresult fires again with the SAME earlier finals still
-            // present. Rebuilding them and then += appending into finalTranscriptRef
-            // re-queued old words → "hello hi… hello hi… hello hi…".
-            //
-            // Fix: rebuild from results[] and ASSIGN (replace) our transcript buffer.
-            // The silence timer below still keeps the mic open during short pauses.
-            let finalText = '';
-            let interim = '';
-            for (let i = 0; i < event.results.length; i++) {
-                const piece = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalText += piece + ' ';
-                } else {
-                    interim += piece;
-                }
-            }
+            // Assign from results[] (never append a full rebuild). On mobile, also
+            // merge overlapping finals and strip interim that re-includes finals.
+            const { finalText, interim } = parseSpeechResultEvent(event);
             finalTranscriptRef.current = finalText;
             setTranscript(finalText);
             setInterimTranscript(interim);

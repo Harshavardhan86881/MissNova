@@ -4,6 +4,7 @@ import {
     Loader2, AlertCircle, RefreshCw, Lightbulb, ChevronRight
 } from 'lucide-react';
 import { authFetch } from '../utils/authFetch';
+import { parseSpeechResultEvent } from '../utils/speechTranscript';
 
 const LANG_CODES = {
     english: 'en-US', spanish: 'es-ES', french: 'fr-FR', german: 'de-DE',
@@ -119,19 +120,7 @@ const ScenarioChat = ({ scenario, navigateTo, onStatsUpdate, onBadges, language 
         };
 
         recognition.onresult = (event) => {
-            // Rebuild from cumulative results[] and ASSIGN — never append a full
-            // rebuild, or pauses re-queue earlier finals into the transcript.
-            // Silence timer still keeps the mic open during short pauses.
-            let finalText = '';
-            let interim = '';
-            for (let i = 0; i < event.results.length; i++) {
-                const piece = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalText += piece + ' ';
-                } else {
-                    interim += piece;
-                }
-            }
+            const { finalText, interim } = parseSpeechResultEvent(event);
             finalTranscriptRef.current = finalText;
             setTranscript(finalText);
             setInterimTranscript(interim);
