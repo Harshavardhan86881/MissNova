@@ -38,12 +38,19 @@ const FillerTracker = ({ onStatsUpdate, onBadges }) => {
         let silenceTimer = null;
 
         recognition.onresult = (e) => {
-            let interim = '', final = '';
+            // Rebuild + assign from cumulative results[] (do not append rebuilds).
+            let finalText = '';
+            let interim = '';
             for (let i = 0; i < e.results.length; i++) {
-                if (e.results[i].isFinal) final += e.results[i][0].transcript + ' ';
-                else interim += e.results[i][0].transcript;
+                const piece = e.results[i][0].transcript;
+                if (e.results[i].isFinal) {
+                    finalText += piece + ' ';
+                } else {
+                    interim += piece;
+                }
             }
-            if (final) { finalTranscriptRef.current += final; setTranscript(finalTranscriptRef.current); }
+            finalTranscriptRef.current = finalText;
+            setTranscript(finalText);
             setInterimTranscript(interim);
             if (silenceTimer) clearTimeout(silenceTimer);
             if (finalTranscriptRef.current.trim()) {

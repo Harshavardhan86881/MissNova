@@ -119,12 +119,21 @@ const ScenarioChat = ({ scenario, navigateTo, onStatsUpdate, onBadges, language 
         };
 
         recognition.onresult = (event) => {
-            let interim = '', final = '';
+            // Rebuild from cumulative results[] and ASSIGN — never append a full
+            // rebuild, or pauses re-queue earlier finals into the transcript.
+            // Silence timer still keeps the mic open during short pauses.
+            let finalText = '';
+            let interim = '';
             for (let i = 0; i < event.results.length; i++) {
-                if (event.results[i].isFinal) final += event.results[i][0].transcript + ' ';
-                else interim += event.results[i][0].transcript;
+                const piece = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalText += piece + ' ';
+                } else {
+                    interim += piece;
+                }
             }
-            if (final) { finalTranscriptRef.current += final; setTranscript(finalTranscriptRef.current); }
+            finalTranscriptRef.current = finalText;
+            setTranscript(finalText);
             setInterimTranscript(interim);
             resetSilenceTimer();
         };

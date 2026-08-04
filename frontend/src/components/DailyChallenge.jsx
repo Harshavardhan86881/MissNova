@@ -67,12 +67,16 @@ const DailyChallenge = ({ onStatsUpdate, onBadges, language = 'english' }) => {
         finalTranscriptRef.current = '';
 
         recognition.onresult = (event) => {
-            let interim = '', final = '';
-            for (let i = 0; i < event.results.length; i++) {
-                if (event.results[i].isFinal) final += event.results[i][0].transcript + ' ';
-                else interim += event.results[i][0].transcript;
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const piece = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscriptRef.current += piece + ' ';
+                    setTranscript(finalTranscriptRef.current);
+                } else {
+                    interim += piece;
+                }
             }
-            if (final) { finalTranscriptRef.current += final; setTranscript(finalTranscriptRef.current); }
             setInterimTranscript(interim);
         };
 

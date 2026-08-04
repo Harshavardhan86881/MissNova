@@ -8,6 +8,19 @@ const LANG_CODES = {
     hindi: 'hi-IN', arabic: 'ar-SA',
 };
 
+/** Build a short TTS script for fluency + grammar feedback (spoken before the reply). */
+const buildFeedbackSpeech = (correction, fluencyScore) => {
+    const parts = [];
+    if (fluencyScore != null && fluencyScore !== '') {
+        parts.push(`Fluency ${fluencyScore} out of 10.`);
+    }
+    if (correction) {
+        if (correction.corrected) parts.push(`Better: ${correction.corrected}.`);
+        if (correction.explanation) parts.push(correction.explanation);
+    }
+    return parts.join(' ').trim();
+};
+
 const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState('');
@@ -44,6 +57,73 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatHistory, loading]);
 
+    /** Queue TTS: grammar/fluency feedback first, conversational reply second. */
+    const speakPracticeResponse = useCallback(({ reply, correction, fluency_score }) => {
+        if (!('speechSynthesis' in window)) {
+            setStatus('idle');
+            return;
+        }
+
+        window.speechSynthesis.cancel();
+
+        const feedback = buildFeedbackSpeech(correction, fluency_score);
+        const replyText = (reply || '').trim();
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v =>
+            v.name.includes('Google US English') || v.name.includes('Female') || v.name.includes('Samantha')
+        );
+
+        const makeUtterance = (text) => {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.95;
+            utterance.pitch = 1.1;
+            if (preferredVoice) utterance.voice = preferredVoice;
+            return utterance;
+        };
+
+        const markSpeaking = () => {
+            setIsSpeaking(true);
+            setStatus('speaking');
+        };
+        const markIdle = () => {
+            setIsSpeaking(false);
+            setStatus('idle');
+        };
+
+        if (!feedback && !replyText) {
+            markIdle();
+            return;
+        }
+
+        if (feedback && replyText) {
+            const feedbackUtterance = makeUtterance(feedback);
+            feedbackUtterance.onstart = markSpeaking;
+            feedbackUtterance.onend = () => {
+                const replyUtterance = makeUtterance(replyText);
+                replyUtterance.onstart = markSpeaking;
+                replyUtterance.onend = markIdle;
+                replyUtterance.onerror = markIdle;
+                window.speechSynthesis.speak(replyUtterance);
+            };
+            feedbackUtterance.onerror = () => {
+                // If feedback fails, still try the reply
+                const replyUtterance = makeUtterance(replyText);
+                replyUtterance.onstart = markSpeaking;
+                replyUtterance.onend = markIdle;
+                replyUtterance.onerror = markIdle;
+                window.speechSynthesis.speak(replyUtterance);
+            };
+            window.speechSynthesis.speak(feedbackUtterance);
+            return;
+        }
+
+        const only = makeUtterance(feedback || replyText);
+        only.onstart = markSpeaking;
+        only.onend = markIdle;
+        only.onerror = markIdle;
+        window.speechSynthesis.speak(only);
+    }, []);
+
     const sendToAI = useCallback(async (text) => {
         if (!text.trim()) return;
         setLoading(true);
@@ -74,14 +154,18 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
 
             if (data.new_badges) onBadges(data.new_badges);
             onStatsUpdate();
-            speakResponse(data.reply_text);
+            speakPracticeResponse({
+                reply: data.reply_text,
+                correction: data.correction,
+                fluency_score: data.fluency_score,
+            });
         } catch (err) {
             setError(err.message);
             setStatus('idle');
         } finally {
             setLoading(false);
         }
-    }, [onStatsUpdate, onBadges]);
+    }, [onStatsUpdate, onBadges, speakPracticeResponse]);
 
     const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -120,21 +204,26 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
         };
 
         recognition.onresult = (event) => {
+            // Web Speech API keeps a cumulative results[] for the whole session.
+            // After a pause, onresult fires again with the SAME earlier finals still
+            // present. Rebuilding them and then += appending into finalTranscriptRef
+            // re-queued old words → "hello hi… hello hi… hello hi…".
+            //
+            // Fix: rebuild from results[] and ASSIGN (replace) our transcript buffer.
+            // The silence timer below still keeps the mic open during short pauses.
+            let finalText = '';
             let interim = '';
-            let final = '';
             for (let i = 0; i < event.results.length; i++) {
+                const piece = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    final += event.results[i][0].transcript + ' ';
+                    finalText += piece + ' ';
                 } else {
-                    interim += event.results[i][0].transcript;
+                    interim += piece;
                 }
             }
-            if (final) {
-                finalTranscriptRef.current += final;
-                setTranscript(finalTranscriptRef.current);
-            }
+            finalTranscriptRef.current = finalText;
+            setTranscript(finalText);
             setInterimTranscript(interim);
-            // Reset silence timer on every new speech result
             resetSilenceTimer();
         };
 
@@ -175,25 +264,6 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
 
     const stopListening = () => {
         recognitionRef.current?.stop();
-    };
-
-    const speakResponse = (text) => {
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.95;
-            utterance.pitch = 1.1;
-            const voices = window.speechSynthesis.getVoices();
-            const preferredVoice = voices.find(v =>
-                v.name.includes('Google US English') || v.name.includes('Female') || v.name.includes('Samantha')
-            );
-            if (preferredVoice) utterance.voice = preferredVoice;
-            utterance.onstart = () => { setIsSpeaking(true); setStatus('speaking'); };
-            utterance.onend = () => { setIsSpeaking(false); setStatus('idle'); };
-            window.speechSynthesis.speak(utterance);
-        } else {
-            setStatus('idle');
-        }
     };
 
     const handleTextSubmit = (e) => {
@@ -330,21 +400,7 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
                             )}
                             {msg.role === 'assistant' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                    {/* Reply */}
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                        <button
-                                            onClick={() => speakResponse(msg.text)}
-                                            style={{
-                                                background: 'none', border: 'none', cursor: 'pointer',
-                                                color: '#a78bfa', padding: '2px', marginTop: '2px', flexShrink: 0,
-                                            }}
-                                        >
-                                            <Volume2 size={14} />
-                                        </button>
-                                        <p style={{ fontSize: '14px', lineHeight: '1.6' }}>{msg.text}</p>
-                                    </div>
-
-                                    {/* Score */}
+                                    {/* Fluency first */}
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         <span style={{
                                             fontSize: '11px', fontWeight: '700',
@@ -356,7 +412,7 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
                                         </span>
                                     </div>
 
-                                    {/* Correction */}
+                                    {/* Grammar correction second */}
                                     {msg.correction && msg.correction.original && (
                                         <div style={{
                                             background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '12px',
@@ -379,7 +435,26 @@ const PracticeChat = ({ onStatsUpdate, onBadges, language = 'english' }) => {
                                         </div>
                                     )}
 
-                                    {/* New Word */}
+                                    {/* Conversational reply third — replay speaks feedback then reply */}
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                        <button
+                                            onClick={() => speakPracticeResponse({
+                                                reply: msg.text,
+                                                correction: msg.correction,
+                                                fluency_score: msg.fluency_score,
+                                            })}
+                                            style={{
+                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                color: '#a78bfa', padding: '2px', marginTop: '2px', flexShrink: 0,
+                                            }}
+                                            title="Play feedback then reply"
+                                        >
+                                            <Volume2 size={14} />
+                                        </button>
+                                        <p style={{ fontSize: '14px', lineHeight: '1.6' }}>{msg.text}</p>
+                                    </div>
+
+                                    {/* New word last */}
                                     {msg.new_word && msg.new_word.word && (
                                         <div style={{
                                             background: 'rgba(245,158,11,0.06)', borderRadius: '10px',
